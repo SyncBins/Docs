@@ -1,8 +1,15 @@
-title: Just the Docs Template
-description: A starter template for a Jeykll site using the Just the Docs theme!
+title: "SyncBins Docs"
+description: "The official SyncBins documentation site. Setup guides, REST/WS API reference, self-hosting on Docker & NixOS, and the end-to-end encryption protocol."
 theme: just-the-docs
 
-url: https://just-the-docs.github.io
+url: "https://docs.syncbins.com"
+baseurl: ""
+repository: "SyncBins/Docs"
 
 aux_links:
-  Template Repository: https://github.com/just-the-docs/just-the-docs-template
+  SyncBins: https://syncbins.com
+  GitHub: https://github.com/SyncBins
+
+aux_links_new_tab: true
+
+search_enabled: true

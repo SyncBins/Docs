@@ -1,0 +1,46 @@
+---
+title: SyncBins
+description: A personal sharing portal — end-to-end encrypted, self-hostable, real-time across all your devices.
+template: splash
+hero:
+  tagline: Drop anything from one device, pick it up on another. Passwords, links, screenshots, files, voice memos — all end-to-end encrypted and always in sync.
+  actions:
+    - text: Get Started
+      link: /guides/getting-started/
+      icon: right-arrow
+    - text: Self-Host
+      link: /guides/self-hosting/
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Why SyncBins?
+
+<CardGrid stagger>
+	<Card title="End-to-end encrypted" icon="seti:lock">
+		Your master key is derived from a 12-word recovery phrase and never leaves your device. The server stores only ciphertext.
+	</Card>
+	<Card title="Self-hostable" icon="laptop">
+		One Docker container, BYO storage (Azure Blob, S3, R2, or local disk). Run it for free on any VPS.
+	</Card>
+	<Card title="Real-time sync" icon="random">
+		Items fan out to all your paired devices the moment they're written, via WebSocket push.
+	</Card>
+	<Card title="10 content types" icon="document">
+		Passwords, links, notes, code snippets, images, video, files, audio, contacts, and locations — each with a tailored UI.
+	</Card>
+	<Card title="MCP server" icon="seti:config">
+		Let AI agents (Cursor, Claude Desktop) read and write items on your behalf — as a paired device, with full E2E encryption.
+	</Card>
+	<Card title="For you alone" icon="approve-check">
+		No teams, no sharing, no public profiles. Future-you is the only audience.
+	</Card>
+</CardGrid>
+
+## Quick look
+
+SyncBins organises your content into **bins** — named, emoji-tagged collections with a configurable capacity. Every item you add is encrypted on-device before it leaves, pushed to the server, and fanned out to your other devices in real time.
+
+The hosted service lives at **[syncbins.com](https://syncbins.com)**. The server is open source — run it yourself on any machine that can run Docker.

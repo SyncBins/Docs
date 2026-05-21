@@ -1,4 +1,7 @@
-# Content Types
+---
+title: Content Types
+description: Reference for all ten SyncBins content types and their payload shapes.
+---
 
 SyncBins supports ten content types. The `type` field is stored in the clear on the server (so the sync protocol can route items without decrypting them), but the `payload` is always encrypted.
 

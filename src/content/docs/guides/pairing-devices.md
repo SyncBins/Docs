@@ -1,4 +1,7 @@
-# Pairing Devices
+---
+title: Pairing Devices
+description: Add phones, laptops, tablets, and AI agents to your SyncBins account.
+---
 
 SyncBins can sync to any number of your devices. Each device holds its own Curve25519 keypair and a copy of the master key, wrapped specifically for that device. Adding a new device proves it knows the pair code without the server ever seeing the master key.
 

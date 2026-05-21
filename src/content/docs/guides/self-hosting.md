@@ -1,4 +1,7 @@
-# Self-Hosting
+---
+title: Self-Hosting
+description: Run SyncBins on your own server with Docker and your choice of blob storage.
+---
 
 SyncBins ships as a single Docker image. You can run it on any Linux VPS, a home server, or a cloud VM. The server never sees plaintext — everything is encrypted on-device before it leaves — so a $4/mo machine is all you need.
 

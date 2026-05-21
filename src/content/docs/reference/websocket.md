@@ -1,4 +1,7 @@
-# WebSocket Protocol
+---
+title: WebSocket Protocol
+description: Wire protocol for the SyncBins real-time sync WebSocket at /ws.
+---
 
 SyncBins uses a WebSocket connection at `/ws` to push new items to connected devices in real time. This page describes the wire protocol for clients and third-party integrations.
 

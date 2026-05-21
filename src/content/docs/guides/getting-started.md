@@ -1,4 +1,7 @@
-# Getting Started
+---
+title: Getting Started
+description: Set up SyncBins, create your first bin, and add your first item.
+---
 
 SyncBins is a personal sharing portal — a place to drop passwords, links, screenshots, code snippets, voice memos, and files from one device and pick them up on another. Everything is end-to-end encrypted: the server stores only ciphertext and can never read your content.
 

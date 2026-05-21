@@ -1,4 +1,7 @@
-# REST API
+---
+title: REST API
+description: Complete reference for the SyncBins HTTP API — items, blobs, devices, and account endpoints.
+---
 
 All endpoints are under `/api`. Every request must include a bearer token in the `Authorization` header:
 

@@ -1,4 +1,7 @@
-# Encryption & Security
+---
+title: Encryption & Security
+description: The full cryptographic model behind SyncBins — primitives, key derivation, item encryption, and the pairing handshake.
+---
 
 SyncBins is end-to-end encrypted. The server stores only ciphertext and can never read your content — not even bin names. This page describes the full cryptographic model.
 

@@ -1,4 +1,7 @@
-# MCP Server
+---
+title: MCP Server
+description: Give AI agents (Cursor, Claude Desktop) read/write access to your SyncBins via the Model Context Protocol.
+---
 
 `@syncbins/mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server that lets AI agents — Cursor, Claude Desktop, or anything else that speaks MCP — read and write items in your SyncBins. It pairs as a regular device, holds the master key locally, and handles all encryption itself. The SyncBins server never sees plaintext.
 

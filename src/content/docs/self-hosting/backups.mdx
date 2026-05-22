@@ -1,14 +1,88 @@
 ---
 title: Backups & restore
-description: Snapshot the SQLite metadata; the blob backend handles its own durability (or your local disk does). Verify a restore in a scratch container before you need it.
+description: What to snapshot on a self-hosted box — SQLite metadata plus blob files — and how to verify a restore before you need it.
 sidebar:
   order: 4
 ---
 
-import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Steps, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-Snapshot the SQLite metadata; the blob backend handles its own durability (or your local disk does). Verify a restore in a scratch container before you need it.
+SyncBins does **not** ship automated in-app backups yet. Settings → Backups shows a "Coming soon" placeholder. Until that API exists, **you** own backup strategy on the host.
 
-<Aside type="note" title="Coming soon">
-This page is part of the redesigned IA but the content hasn't landed yet. The KNOWLEDGE-BASE doc has a draft outline; drop a comment on [the docs issue](https://github.com/SyncBins/Docs/issues) if you want to help write it.
-</Aside>
+Your **12-word recovery phrase** is the authoritative key backup — without it, ciphertext on disk is useless. Server snapshots protect against disk failure, not against losing the phrase.
+
+## What to back up
+
+| Component | Location (typical Docker) | Contains |
+|-----------|---------------------------|----------|
+| **SQLite DB** | `./data/syncbins.db` | Devices, encrypted items, sync versions, tenant rows |
+| **Local blobs** | `./data/blobs/*.bin` | Encrypted large payloads when `STORAGE_KIND=local` |
+| **Cloud blobs** | R2 / Azure bucket | Same ciphertext if `STORAGE_KIND=r2` or `azure` |
+| **Env secrets** | `docker/.env` | `BLOB_URL_SECRET`, storage credentials — **not** in the DB |
+
+Ciphertext without your recovery phrase (and a paired device or phrase to derive keys) cannot be read. Backups preserve **availability**, not **access** if you lose the phrase.
+
+## Single-tenant snapshot (local storage)
+
+<Steps>
+1. **Stop writes (optional but safest):** `docker compose stop syncbins` — brief downtime, consistent SQLite file.
+2. **Copy metadata:** `cp ./data/syncbins.db ./backups/syncbins-$(date +%F).db`
+3. **Copy blobs:** `tar -czf ./backups/blobs-$(date +%F).tar.gz -C ./data blobs`
+4. **Copy env:** store `docker/.env` in your secrets manager (not in the same unencrypted tarball as production keys if you can avoid it).
+5. **Start again:** `docker compose start syncbins`
+</Steps>
+
+For hot backups without stopping the container, SQLite's online copy works if nothing else is writing:
+
+```sh
+sqlite3 ./data/syncbins.db ".backup './backups/syncbins-$(date +%F).db'"
+```
+
+Still copy `blobs/` separately — blob files are independent files on disk.
+
+## Cloud blob backends
+
+When blobs live in R2 or Azure, back up **both**:
+
+- SQLite (item metadata + `blob_ref` names)
+- The object store (enable provider versioning or periodic `rclone sync`)
+
+Restoring SQLite without matching blob objects produces items that 404 on download.
+
+## Restore drill (do this once)
+
+<Steps>
+1. Spin up a **scratch** container on another port or machine.
+2. Drop in your backed-up `syncbins.db` and `blobs/` (or point at restored bucket credentials).
+3. Set the same `BLOB_URL_SECRET` as production (signed local URLs depend on it).
+4. Open the UI, unlock with recovery phrase, confirm item count and a random blob opens.
+5. Destroy the scratch instance.
+</Steps>
+
+## What in-app backup will add later
+
+The Settings → Backups pane describes planned encrypted exports to S3/R2. That is **not implemented** — no API, no scheduled jobs. When it ships, this page will document the export format and restore path.
+
+## Multi-tenant operators
+
+One SQLite file holds all tenants. Backup the whole file plus shared blob prefix; per-tenant restore requires tooling not shipped yet. See [Multi-tenant mode](/self-hosting/multi-tenant/) for operational notes.
+
+## Going deeper
+
+<CardGrid>
+  <LinkCard
+    title="Choosing storage"
+    description="Local vs R2 vs Azure — what to snapshot where."
+    href="/self-hosting/storage/"
+  />
+  <LinkCard
+    title="Recovery scenarios"
+    description="Lost phrase vs lost disk — different problems."
+    href="/get-started/recovery/"
+  />
+  <LinkCard
+    title="Troubleshooting"
+    description="Health checks after restore."
+    href="/self-hosting/troubleshooting/"
+  />
+</CardGrid>

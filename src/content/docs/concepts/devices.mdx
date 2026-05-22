@@ -1,14 +1,89 @@
 ---
 title: The device model
-description: Plainer-prose companion to the encryption page. What pairing actually does. What revocation means. What it means to "lose a device" vs "lose the phrase."
+description: What a device is in SyncBins, what pairing and revocation do, and how that differs from losing your recovery phrase.
 sidebar:
   order: 3
 ---
 
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-Plainer-prose companion to the encryption page. What pairing actually does. What revocation means. What it means to "lose a device" vs "lose the phrase."
+SyncBins is **single-user**, but **multi-device**. A *device* is any browser, CLI, or agent that has completed pairing and holds a session token plus a device keypair.
 
-<Aside type="note" title="Coming soon">
-This page is part of the redesigned IA but the content hasn't landed yet. The KNOWLEDGE-BASE doc has a draft outline; drop a comment on [the docs issue](https://github.com/SyncBins/Docs/issues) if you want to help write it.
+## What a device is
+
+Each device has:
+
+| Field | Stored where | Purpose |
+|-------|--------------|---------|
+| **Device ID** | Server (ULID) | Identity in API and wrapped-key bundles |
+| **Name + glyph** | Server (plaintext) | Settings UI, feed attribution |
+| **Public key** | Server (base64) | Other devices wrap item keys to it |
+| **Private key** | Client only, sealed to master key | Unwrap item keys |
+| **Session token** | Client (`localStorage`) | `Authorization: Bearer …` on REST/WS |
+| **Master key** | Client memory while unlocked | Pairing/recovery; not sent to server |
+
+There is no shared "account password." Access is **device session + crypto keys**, with the **12-word recovery phrase** as the ultimate backup.
+
+## Pairing = trusting a new keyholder
+
+Pairing gives a new device:
+
+1. A **session token** (30-day TTL on the server; no auto-renewal yet).
+2. The **master key**, wrapped to that device's fresh Curve25519 public key.
+3. A path to **historical items** via background re-wrap from devices that can still decrypt them.
+
+The six-word code is the out-of-band secret that lets the new device prove it isn't an impostor on the network. See [Pairing more devices](/get-started/pairing/) for the UI flow and [How encryption works](/concepts/encryption/#pairing-a-new-device) for the message sequence.
+
+## Revocation = evicting a keyholder
+
+**Settings → Devices → Revoke** on any *other* device:
+
+- Invalidates that device's bearer token immediately.
+- Closes its WebSocket connections.
+- Stops including its public key in new item wrapped-key bundles.
+- Triggers a pubkey refresh on remaining devices so they re-wrap without the revoked key.
+
+Revocation is **forward-looking**. Anything the revoked device already decrypted stays on that machine until you wipe it locally.
+
+<Aside type="note" title="You can't revoke yourself">
+The current device shows **This device** instead of Revoke. Use another paired device to remove this one.
 </Aside>
+
+## Recovery phrase vs device loss
+
+| Situation | Recovery phrase needed? | Pair code needed? |
+|-----------|-------------------------|-------------------|
+| Lost one device, others remain | No | No — revoke the lost device |
+| Cleared browser, others remain | No | Yes — six words from Settings → Devices |
+| All devices gone, phrase saved | Yes — restore path | No |
+| All devices gone, phrase lost | **Unrecoverable** | — |
+
+The phrase derives the master key. Devices are disposable entry points; the phrase is not.
+
+## MCP counts as a device
+
+[`@syncbins/mcp`](/integrations/mcp/) pairs through the same handshake and appears in **Settings → Devices** like a laptop. Revoke it when you stop trusting an agent process.
+
+## Session lifetime
+
+Bearer tokens expire after **30 days** (`SESSION_TTL_MS`). There is no silent refresh yet — if a device goes idle past expiry, re-pair or restore with the recovery phrase.
+
+## Going deeper
+
+<CardGrid>
+  <LinkCard
+    title="Recovery scenarios"
+    description="Step-by-step for the five common failures."
+    href="/get-started/recovery/"
+  />
+  <LinkCard
+    title="How encryption works"
+    description="Pair handshake diagram and threat model."
+    href="/concepts/encryption/"
+  />
+  <LinkCard
+    title="REST API → Devices"
+    description="HTTP endpoints for pairing."
+    href="/reference/rest/#devices"
+  />
+</CardGrid>

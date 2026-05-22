@@ -1,14 +1,104 @@
 ---
 title: Troubleshooting
-description: Top operational issues — TLS not provisioning, WS reconnect loops, blob upload 403s, sync-version drift. Each with a diagnostic command and a fix.
+description: Health checks, logs, and fixes for the issues self-hosters hit most often — TLS, pairing, WebSocket, and blob uploads.
 sidebar:
   order: 8
 ---
 
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-Top operational issues — TLS not provisioning, WS reconnect loops, blob upload 403s, sync-version drift. Each with a diagnostic command and a fix.
+Start every investigation with two commands:
 
-<Aside type="note" title="Coming soon">
-This page is part of the redesigned IA but the content hasn't landed yet. The KNOWLEDGE-BASE doc has a draft outline; drop a comment on [the docs issue](https://github.com/SyncBins/Docs/issues) if you want to help write it.
-</Aside>
+```sh
+curl -s https://YOUR-DOMAIN/api/health
+docker compose -f App/docker/docker-compose.yml logs syncbins --tail=200
+```
+
+`{"ok":true,"version":"…"}` means the process is up. Everything else narrows from there.
+
+## Server won't start
+
+| Log / symptom | Cause | Fix |
+|---------------|-------|-----|
+| `BLOB_URL_SECRET is required` | Missing env in production compose | Set in `docker/.env`: `openssl rand -hex 32` |
+| `Invalid server configuration` | Zod validation failed on env | Match [Configuration reference](/self-hosting/config/) |
+| `EADDRINUSE :8080` | Port conflict | Stop other service or change `LISTEN_PORT` |
+| SQLite permission error | Bind mount not writable | `chown`/`chmod` on `./data` for container user |
+
+## TLS / certificate issues
+
+| Symptom | Fix |
+|---------|-----|
+| Browser stuck on HTTP or cert warning | Confirm DNS A/AAAA record, ports 80+443 open, hit HTTPS not `:8080` |
+| Caddy loop / no cert (multi-tenant) | Ensure tenant exists — `curl "https://apex/api/tls-check?domain=slug.domain"` returns 200 |
+| LE rate limit | Reduce repeated failed issuances; fix `tls-check` before retrying |
+
+See [TLS & domains](/self-hosting/tls/).
+
+## Can't complete onboarding / bootstrap
+
+| Symptom | Fix |
+|---------|-----|
+| "Already has devices" on fresh self-host | Someone else claimed first — use pair path, or `POST /api/devices/bootstrap/restart` if single-tenant orphan (see [First-time setup](/get-started/first-setup/#if-bootstrap-fails-with-already-has-devices)) |
+| Server unreachable from browser | Check Caddy → syncbins network, `DOMAIN` matches URL |
+| Recovery phrase mismatch | Wrong vault — compare fingerprint in onboarding with Settings → Encryption |
+
+## Pairing failures
+
+| Error | Fix |
+|-------|-----|
+| `pair_expired` | Code older than 5 minutes — generate new code |
+| `pair_invalid` | Typo in six words — copy hyphenated code from **Copy code** button |
+| Hangs on "waiting" | Keep generating device online with active session |
+
+Client-side: [Pairing more devices](/get-started/pairing/#troubleshooting).
+
+## Sync / WebSocket
+
+| Symptom | Fix |
+|---------|-----|
+| Items save but don't appear elsewhere | Check WS in browser devtools — should stay connected to `wss://…/ws?token=…` |
+| Constant reconnect loop | Token expired (30-day session) — re-pair device |
+| Stale feed after offline | Normal — client sends `hello` with last version on reconnect; wait for `caught_up` |
+
+Protocol details: [How sync works](/concepts/sync/), [WebSocket protocol](/reference/ws/).
+
+## Blob upload / download 403
+
+| Symptom | Fix |
+|---------|-----|
+| Upload URL rejected | `storage_full` — raise `STORAGE_CAP_BYTES` or free space (multi-tenant quotas) |
+| Download 403 on local storage | `BLOB_URL_SECRET` changed since upload — secrets must stay stable or URLs invalidate |
+| R2/Azure errors | Verify credentials in `.env`, bucket exists, clock skew minimal |
+
+## Wrong data / empty after upgrade
+
+1. Confirm bind mount still points at `./data:/data` in compose.
+2. Check `SQLITE_PATH` and `LOCAL_BLOB_DIR` inside container env.
+3. If you restored backup, ensure blob files match `blob_ref` entries in SQLite.
+
+## Still stuck?
+
+Hosted: **info@syncbins.com** (never send recovery phrase or PIN).
+
+Self-hosted: open a [GitHub issue](https://github.com/SyncBins/App/issues) with redacted logs, `TENANT_MODE`, storage backend, and steps to reproduce.
+
+## Going deeper
+
+<CardGrid>
+  <LinkCard
+    title="Configuration reference"
+    description="Every env var."
+    href="/self-hosting/config/"
+  />
+  <LinkCard
+    title="Error codes"
+    description="API failure catalogue."
+    href="/reference/errors/"
+  />
+  <LinkCard
+    title="Recovery scenarios"
+    description="User-side lockouts."
+    href="/get-started/recovery/"
+  />
+</CardGrid>

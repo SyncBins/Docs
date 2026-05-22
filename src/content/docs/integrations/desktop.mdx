@@ -1,14 +1,42 @@
 ---
 title: Native desktop
-description: Tauri-based desktop app — global shortcut, system tray, drag-and-drop from Finder/Explorer. Same encryption envelope as the web client.
+description: macOS, Windows, and Linux desktop clients. Not shipped — use the web app or MCP today.
 sidebar:
   order: 4
+  badge:
+    text: Soon
+    variant: note
 ---
 
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-Tauri-based desktop app — global shortcut, system tray, drag-and-drop from Finder/Explorer. Same encryption envelope as the web client.
+Packaged desktop apps (likely Tauri or Electron) would give you a menubar drop target, OS keychain integration, and offline-tolerant sync — same server, same crypto.
 
-<Aside type="note" title="Coming soon">
-This page is part of the redesigned IA but the content hasn't landed yet. The KNOWLEDGE-BASE doc has a draft outline; drop a comment on [the docs issue](https://github.com/SyncBins/Docs/issues) if you want to help write it.
+## Status today
+
+**Not available.** There is no desktop repo or release artifact yet. SyncBins runs in the browser and via [`@syncbins/mcp`](/integrations/mcp/) for agent workflows.
+
+## What works instead (now)
+
+| Need | Use |
+|------|-----|
+| Daily use on laptop | Web app — pin the tab, set a [quick-unlock PIN](/get-started/quick-unlock/) |
+| Self-hosted server | [Docker quick start](/self-hosting/quickstart/) |
+| Cursor / Claude access | [MCP server](/integrations/mcp/) |
+
+<Aside type="note" title="Living doc">
+Desktop docs will appear when there is a downloadable build and a pairing flow implemented in code — not before.
 </Aside>
+
+<CardGrid>
+  <LinkCard
+    title="Welcome"
+    description="Hosted vs self-hosted entry."
+    href="/get-started/welcome/"
+  />
+  <LinkCard
+    title="MCP server"
+    description="CLI integration that ships today."
+    href="/integrations/mcp/"
+  />
+</CardGrid>

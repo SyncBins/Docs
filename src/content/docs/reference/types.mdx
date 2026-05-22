@@ -1,14 +1,178 @@
 ---
 title: Content types
-description: "All 10 content types with TypeScript payload shapes, rendering notes, and auto-detect rules. Source of truth: `shared/src/types.ts`."
+description: "All 11 item types with TypeScript payload shapes, UI notes, and what the composer auto-detects today. Source: shared/src/types.ts."
 sidebar:
   order: 4
 ---
 
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-All 10 content types with TypeScript payload shapes, rendering notes, and auto-detect rules. Source of truth: `shared/src/types.ts`.
+SyncBins supports **eleven** content types (`ITEM_TYPES` in `shared/src/types.ts`). The `type` field is stored **unencrypted** on the server so sync can route without decrypting. Every field inside `payload` is ciphertext on the wire.
 
-<Aside type="note" title="Coming soon">
-This page is part of the redesigned IA but the content hasn't landed yet. The KNOWLEDGE-BASE doc has a draft outline; drop a comment on [the docs issue](https://github.com/SyncBins/Docs/issues) if you want to help write it.
-</Aside>
+## Auto-detection today (web app)
+
+The composer and clipboard hint only infer a subset:
+
+| Input | Detected type | Where |
+|-------|---------------|-------|
+| `http(s)://…`, domain-like string | `link` | Composer + clipboard |
+| Text with braces/`;` heuristic | `code` | Composer + clipboard |
+| 12–64 char high-entropy token | `password` | Clipboard hint only |
+| Image in clipboard | `image` | Clipboard hint |
+| Other text | `text` | Composer + clipboard |
+| Dropped image file | `image` | Drag/drop |
+| Dropped other file | `file` | Drag/drop |
+
+There is **no** composer auto-detect for `note`, `video`, `audio`, `contact`, or `location` yet — create those via API/MCP or future UI.
+
+Link items save with placeholder title `New link` and desc `Fetching preview…`. **Open Graph fetching is not implemented** — metadata stays placeholder until edited.
+
+---
+
+## `password`
+
+```ts
+{ service: string; user: string; secret: string; }
+```
+
+UI hides `secret` by default with a reveal toggle and copy button.
+
+---
+
+## `link`
+
+```ts
+{ url: string; title: string; desc: string; site: string; }
+```
+
+Renders as a link tile (title, description, domain). `site` is derived client-side from the URL host.
+
+---
+
+## `text` / `note`
+
+```ts
+{ text: string; }
+```
+
+Same payload shape. Rendered with `pre-wrap`. Distinction is cosmetic in the UI.
+
+---
+
+## `code`
+
+```ts
+{ lang: string; label: string; text: string; }
+```
+
+Monospace block, language chip, copy button. Composer defaults: `lang: 'txt'`, `label: 'snippet'`.
+
+---
+
+## `image`
+
+```ts
+{ w: number; h: number; label: string; tone: number; blobRef?: string; }
+```
+
+Inline if small; **`blobRef` set** when encrypted bytes exceed inline limit (~64 KB ciphertext). Drag/drop currently uses placeholder dimensions until blob pipeline fills them in.
+
+---
+
+## `video`
+
+```ts
+{ url: string; title: string; desc: string; duration: string; tone: number; }
+```
+
+Thumbnail + play overlay when UI supports it. Large files use blob storage like images.
+
+---
+
+## `file`
+
+```ts
+{ name: string; size: string; kind: string; blobRef?: string; }
+```
+
+Icon tile with filename and download. `size` is human-readable (e.g. `2.4 MB`).
+
+---
+
+## `audio`
+
+```ts
+{ duration: number; label: string; wave: number[]; blobRef?: string; }
+```
+
+Play control + waveform from `wave` samples. Voice memo recording UI is **not** in the alpha web composer.
+
+---
+
+## `contact`
+
+```ts
+{ name: string; role: string; email: string; phone: string; }
+```
+
+Initials avatar + contact lines.
+
+---
+
+## `location`
+
+```ts
+{ name: string; addr: string; lat: number; lng: number; }
+```
+
+Map pin rendered client-side from lat/lng.
+
+---
+
+## Large items (blobs)
+
+Payloads larger than ~**64 KB** after encryption use the blob flow:
+
+1. `POST /api/blobs/upload-url`
+2. Upload ciphertext to presigned URL (R2 / Azure / signed local URL)
+3. `POST /api/items` with `blobRef`, `blobNonce`, `blobKeys` (no inline `payloadEnc`)
+
+See [Encryption envelope](/reference/envelope/#blob-backed-items).
+
+---
+
+## Type summary
+
+| Type | Blob-backed | Auto-detect in web UI |
+|------|-------------|------------------------|
+| `password` | No | Clipboard only |
+| `link` | No | Composer + clipboard |
+| `text` | No | Composer + clipboard |
+| `note` | No | No |
+| `code` | No | Composer + clipboard |
+| `image` | Often | Drag/drop + clipboard |
+| `video` | Often | No |
+| `file` | Often | Drag/drop |
+| `audio` | Often | No |
+| `contact` | No | No |
+| `location` | No | No |
+
+## Going deeper
+
+<CardGrid>
+  <LinkCard
+    title="Adding your first item"
+    description="Composer, paste hint, drag/drop."
+    href="/get-started/first-item/"
+  />
+  <LinkCard
+    title="REST API → Items"
+    description="PUT shape with payloadEnc vs blobRef."
+    href="/reference/rest/#items"
+  />
+  <LinkCard
+    title="MCP server"
+    description="sb_put_item accepts all types."
+    href="/integrations/mcp/#available-tools"
+  />
+</CardGrid>

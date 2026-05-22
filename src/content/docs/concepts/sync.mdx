@@ -1,14 +1,97 @@
 ---
 title: How sync works
-description: WebSocket fanout, version counters, the catch-up flow after a reconnect. Why we don't use CRDTs (last-write-wins is correct for a single user).
+description: Version-based catch-up over WebSocket, real-time fanout, and why last-write-wins is enough for a single-user app.
 sidebar:
   order: 2
 ---
 
-import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Steps, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-WebSocket fanout, version counters, the catch-up flow after a reconnect. Why we don't use CRDTs (last-write-wins is correct for a single user).
+SyncBins sync is deliberately simple: the server assigns a global **version** integer to every item write and delete. Clients track the highest version they've applied and ask for everything newer.
 
-<Aside type="note" title="Coming soon">
-This page is part of the redesigned IA but the content hasn't landed yet. The KNOWLEDGE-BASE doc has a draft outline; drop a comment on [the docs issue](https://github.com/SyncBins/Docs/issues) if you want to help write it.
+No CRDTs, no operational transform — one human, one timeline, last version wins.
+
+## Two transport paths
+
+| Path | Used by | How it works |
+|------|---------|--------------|
+| **WebSocket** `/ws` | Web app (primary) | Push `item` / `delete` frames in real time |
+| **REST** `GET /api/items?since=N` | Catch-up, MCP polling | Pull batches of rows with `version > since` |
+
+Both carry the same encrypted `ItemRow` shape from `shared/src/api.ts`.
+
+## WebSocket lifecycle
+
+<Steps>
+1. Client opens `wss://<host>/ws?token=<bearer>` (token required before upgrade).
+2. Client sends `{ "type": "hello", "since": <lastVersion> }` — use `0` on first connect.
+3. Server replays backlog: every row with `version > since`, as `item` or `delete` messages, in version order.
+4. Server sends `{ "type": "caught_up", "version": <head> }`.
+5. Steady state: server pushes new `item` / `delete` frames when **other** devices write. The writing device already has the item locally.
+6. Heartbeat: server sends `{ "type": "ping" }` every **30s**. Client replies `{ "type": "pong" }`. Two missed pongs (~90s grace) → server closes the socket.
+</Steps>
+
+Full message schemas: [WebSocket protocol](/reference/ws/).
+
+<Aside type="note" title="No server `error` frame">
+The wire schema in `shared/src/ws.ts` does not define a server `error` message type. Fatal auth problems fail at HTTP upgrade time; malformed client frames are dropped.
 </Aside>
+
+## Version numbers
+
+- **Global** across all bins — not per-bin cursors.
+- **Monotonic** — assigned by the server on each `POST /api/items` and `DELETE /api/items/:id`.
+- **Durable** — soft-deleted items keep their row; deletes get a new higher version and replay as `{ type: "delete" }`.
+
+Clients should persist the highest applied version locally. On reconnect, send `hello` with that value — the backlog fills any gap from the disconnect.
+
+## Fanout
+
+When device A writes an item:
+
+1. Server persists ciphertext + wrapped keys, bumps `version`, appends to `sync_log`.
+2. Server pushes an `item` frame to every **other** connected WebSocket for that tenant.
+3. Device B decrypts, upserts into local state, updates its version cursor.
+
+If device B was offline, it catches up on next `hello` or REST poll.
+
+## Re-wrap after pairing
+
+When a new device joins, existing online clients run `rewrapItemsForAllDevices()`:
+
+- Scan items this device can decrypt.
+- If any paired device's pubkey is missing from `payloadEnc.keys`, re-encrypt and `PUT` the item with an expanded key bundle.
+
+That is why historical items eventually appear on a new laptop without manual export.
+
+## Deletes
+
+Deleting an item is a **soft delete**: `deletedAt` is set server-side, payload fields cleared, version incremented. Other devices receive a `delete` push and hide the row locally. There is **no trash UI** and no timed undelete in the current app.
+
+## MCP and polling
+
+The MCP server does not hold a WebSocket. It polls `GET /api/items?since=N` on tool calls. Higher latency, same ciphertext. See [MCP server](/integrations/mcp/).
+
+## Reconnection guidance
+
+Implement exponential backoff with jitter (start ~1s, cap ~60s). Always resume with the last stored version in `hello`. The server replay is idempotent — applying the same version twice should no-op in the client store.
+
+## Going deeper
+
+<CardGrid>
+  <LinkCard
+    title="WebSocket protocol"
+    description="Exact JSON shapes and heartbeat constants."
+    href="/reference/ws/"
+  />
+  <LinkCard
+    title="REST API → Items"
+    description="PUT, GET since, DELETE."
+    href="/reference/rest/#items"
+  />
+  <LinkCard
+    title="The device model"
+    description="Pairing, sessions, revocation."
+    href="/concepts/devices/"
+  />
+</CardGrid>

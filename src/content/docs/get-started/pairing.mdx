@@ -1,14 +1,107 @@
 ---
 title: Pairing more devices
-description: How to pair a phone, a second laptop, or a browser tab. QR code or 6-word handshake. Covers what syncs vs what stays local.
+description: Add a phone, second laptop, or MCP agent with a six-word code from Settings → Devices. QR scanning is not available in the web app yet.
 sidebar:
   order: 4
 ---
 
-import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Steps, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-How to pair a phone, a second laptop, or a browser tab. QR code or 6-word handshake. Covers what syncs vs what stays local.
+Each device you pair gets its own Curve25519 keypair and a copy of the master key, wrapped so only that device can unwrap it. The server forwards pairing messages but never sees the master key.
 
-<Aside type="note" title="Coming soon">
-This page is part of the redesigned IA but the content hasn't landed yet. The KNOWLEDGE-BASE doc has a draft outline; drop a comment on [the docs issue](https://github.com/SyncBins/Docs/issues) if you want to help write it.
+## Before you start
+
+You need **one device already signed in** to generate a code. Pair codes expire after **5 minutes** (`PAIR_CODE_TTL_MS` on the server).
+
+<Aside type="caution" title="Treat the code like a one-time password">
+Anyone who can read the six words while they're valid could pair as you. Don't display the code on a shared screen or stream.
 </Aside>
+
+## On the device you already use
+
+<Steps>
+1. Open **Settings → Devices**.
+2. Under **Pair a new device**, click **Generate pair code**.
+3. Six words appear (hyphenated when copied). A QR placeholder is shown for future mobile apps — **you cannot scan it from the web app today**.
+4. Leave this screen open until pairing completes. The existing device must stay online to deliver the wrapped master key.
+</Steps>
+
+> **INSERT SCREENSHOT HERE** — Settings → Devices with six-word pair code visible.
+
+The UI shows a countdown while waiting (`Code rotates every 5 minutes · valid for …`). Use **Copy code** to paste into a secure channel if the new device isn't beside you.
+
+## On the new device
+
+<Tabs syncKey="pair-entry">
+  <TabItem label="During onboarding">
+    1. Open your SyncBins URL (hosted subdomain or self-hosted domain).
+    2. On the welcome screen, choose **Pair with a six-word code**, or pick **Pair this device** on step 2.
+    3. Type all six words in order (spaces or hyphens both work).
+    4. Name the device and finish the wizard (PIN optional).
+  </TabItem>
+  <TabItem label="Already past onboarding">
+    On the **new** device: **Settings → SyncBin → Open wizard**, choose **Pair this device**, and enter the six words. Or clear site data for your SyncBins URL and start onboarding with the pair path.
+  </TabItem>
+</Tabs>
+
+The new device:
+
+1. Fetches the ephemeral public key from the server using the code.
+2. Generates its own keypair and sends its public key plus an HMAC **attestation** (proves it read the code out-of-band).
+3. Receives the master key wrapped to its public key from the existing device.
+4. Downloads and decrypts items as the sync cursor catches up.
+
+Handshake details: [How encryption works → Pairing](/concepts/encryption/#pairing-a-new-device).
+
+## What syncs to the new device
+
+- **Future items** — immediate real-time fanout over WebSocket.
+- **Past items** — when a paired device comes online, it runs a **re-wrap** pass: any item this device can already decrypt gets updated with wrapped keys for devices that were missing. Items nobody can decrypt (e.g. written on a revoked device only) are skipped.
+
+So a newly paired laptop should receive your history within a few minutes of the first online session, not only new drops.
+
+## Managing devices
+
+**Settings → Devices** lists every paired device: name, glyph, paired date, last seen, online/offline.
+
+| Action | Effect |
+|--------|--------|
+| **Rename** | Click the device name (not available for the current device label). |
+| **Revoke** | Invalidates that device's session token immediately. It stops receiving new items. Cannot revoke **This device** from itself — use another device. |
+| **This device** | The browser you're in now; revoke it from elsewhere. |
+
+Revocation does **not** remotely wipe items already downloaded on that device.
+
+## Pairing MCP or other agents
+
+The [`@syncbins/mcp`](/integrations/mcp/) CLI uses the same six-word handshake. See [MCP server → Install & pair](/integrations/mcp/#install--pair).
+
+## Troubleshooting
+
+| Problem | What to do |
+|---------|------------|
+| **Code expired** | Generate a new code on the existing device. |
+| **Attestation invalid** | Wrong word order or typo — re-enter all six words. |
+| **Waiting for existing device** | Keep the device that generated the code signed in with an active session. |
+| **Items unreadable on new device** | Wait for re-wrap to finish; pull to refresh. Items created before any surviving decryptor existed may remain inaccessible. |
+| **QR doesn't scan** | Expected — type the six words manually until mobile apps ship. |
+
+## Going deeper
+
+<CardGrid>
+  <LinkCard
+    title="The device model"
+    description="Pairing, revocation, and recovery in plain language."
+    href="/concepts/devices/"
+  />
+  <LinkCard
+    title="Recovery scenarios"
+    description="Lost device, cleared browser, forgot PIN."
+    href="/get-started/recovery/"
+  />
+  <LinkCard
+    title="REST API → Devices"
+    description="pair-init, pair-fetch-epk, pair-wrap endpoints."
+    href="/reference/rest/#devices"
+  />
+</CardGrid>

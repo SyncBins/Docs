@@ -19,12 +19,10 @@ The PIN is the shortcut.
 When you set a PIN, the device:
 
 <Steps>
-1. Wraps your already-unlocked master key with a fresh Argon2id pass keyed on the PIN.
-2. Stores the wrapped blob in IndexedDB (or its equivalent on the platform).
-3. On next unlock, prompts for the PIN instead of the 12 words.
+1. Wraps your already-unlocked master key with Argon2id keyed on the PIN.
+2. Stores the wrapped blob in **localStorage** (key `syncbins-pin-v1`) on this browser only.
+3. On next unlock, prompts for the PIN instead of the 12 words (~500ms Argon2id per attempt vs ~700ms for the full phrase).
 </Steps>
-
-Re-deriving from a 6-digit PIN is ~80ms vs ~700ms from the phrase. Difference between "unlock is instant" and "unlock is noticeable."
 
 <Aside type="note" title="The phrase still works">
 The PIN doesn't replace your recovery phrase — it sits alongside it. You can always fall back to "Unlock with recovery phrase" on the lock screen, and you must do so on every new device.
@@ -32,14 +30,14 @@ The PIN doesn't replace your recovery phrase — it sits alongside it. You can a
 
 ## Setting one up
 
-Settings → Encryption → **Set quick-unlock PIN**. Pick 6 or more digits. We enforce:
+Settings → Encryption → **Set a PIN** / **Change PIN** / **Remove PIN**. Requirements today:
 
-- Minimum 6 digits, no maximum
-- No straight runs (`123456`, `654321`)
-- No more than 3 repeating digits in a row (`111456` is OK; `111156` is not)
-- Not your last 5 PINs
+- Minimum **6 digits** (numeric only)
+- Confirmation must match
 
-After confirming, the lock screen will offer PIN entry by default. The phrase option is always one tap away under "Other unlock methods."
+There are no rules yet for sequential digits or PIN history — keep it non-obvious anyway.
+
+After saving, the lock screen offers PIN entry by default. **Use recovery phrase** remains available under other unlock methods.
 
 ## What it isn't
 
@@ -51,9 +49,10 @@ If your threat model includes someone getting your device while it's idle-locked
 
 ## Failure modes
 
-- **Wrong PIN, 5 times in a row:** lock the device out for 30 seconds (doubles each attempt). Falls back to phrase after 10 attempts.
-- **Forgotten PIN:** unlock with the recovery phrase, then set a new PIN. The old wrapped blob is deleted; no recovery flow needed.
-- **PIN exposed:** Settings → Encryption → Reset PIN. Old wrapped blob is purged, recovery phrase required for one unlock to re-establish.
+- **Wrong PIN:** Up to **5** attempts (`PIN_MAX_ATTEMPTS`). Each failure increments a counter in the PIN blob.
+- **Lockout after 5 failures:** PIN blob is **wiped** — unlock with the 12-word recovery phrase, then set a new PIN if you want.
+- **Forgotten PIN:** Same as lockout — phrase always works.
+- **Change/remove PIN:** Settings → Encryption while the vault is unlocked (master key in memory).
 
 ## Per-device, not per-account
 

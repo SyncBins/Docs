@@ -1,14 +1,111 @@
 ---
 title: TLS & domains
-description: Caddy auto-issues Let's Encrypt certs the first time a hostname is hit. This page covers DNS prerequisites, subdomain routing, and the on-demand-TLS ask hook used in multi-tenant mode.
+description: Production compose ships Caddy for Let's Encrypt. Single hostname for self-hosters; wildcard on-demand TLS for multi-tenant.
 sidebar:
   order: 3
 ---
 
-import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Steps, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-Caddy auto-issues Let's Encrypt certs the first time a hostname is hit. This page covers DNS prerequisites, subdomain routing, and the on-demand-TLS ask hook used in multi-tenant mode.
+The production stack in `App/docker/` runs **Caddy 2** in front of SyncBins. Caddy terminates TLS and reverse-proxies to the Node server on port 8080 inside the Docker network.
 
-<Aside type="note" title="Coming soon">
-This page is part of the redesigned IA but the content hasn't landed yet. The KNOWLEDGE-BASE doc has a draft outline; drop a comment on [the docs issue](https://github.com/SyncBins/Docs/issues) if you want to help write it.
-</Aside>
+SyncBins itself speaks plain HTTP on `8080` — do not expose that port directly to the internet without a proxy.
+
+## Single-tenant (one hostname)
+
+Typical self-hosted setup: `box.yourdomain.com` → your VPS.
+
+### DNS
+
+<Steps>
+1. Create an **A** (and **AAAA** if you have IPv6) record: `box.yourdomain.com` → server IP.
+2. Open ports **80** and **443** on the firewall (required for ACME HTTP-01 / TLS-ALPN).
+</Steps>
+
+### Docker env
+
+In `docker/.env`:
+
+```ini
+DOMAIN=box.yourdomain.com
+BLOB_URL_SECRET=…   # openssl rand -hex 32
+```
+
+`docker-compose.yml` passes `DOMAIN` to Caddy and mounts `Caddyfile`.
+
+### Caddyfile behavior
+
+The bundled `App/docker/Caddyfile` uses **on-demand TLS** even for single-host — Caddy requests a cert the first time the hostname is accessed, with authorization from SyncBins:
+
+```caddy
+{
+  on_demand_tls {
+    ask http://syncbins:8080/api/tls-check
+    interval 2m
+    burst 5
+  }
+}
+
+*.{$DOMAIN}, {$DOMAIN} {
+  tls { on_demand }
+  encode zstd gzip
+  reverse_proxy syncbins:8080
+}
+```
+
+For a single-tenant box with one `DOMAIN`, the wildcard pattern still works — Caddy issues a cert for your exact hostname on first visit.
+
+### Verify
+
+```sh
+curl -s https://box.yourdomain.com/api/health
+# → {"ok":true,"version":"…"}
+```
+
+Browser padlock + green **Settings → Server** status confirms end-to-end.
+
+## Multi-tenant (wildcard subdomains)
+
+Hosted-style: `*.syncbins.com` plus apex `syncbins.com`.
+
+<Steps>
+1. **DNS:** Wildcard `*.yourservice.com` and apex `yourservice.com` → same IP.
+2. **Env:** `TENANT_MODE=multi`, `BASE_DOMAIN=yourservice.com`, plus storage and optional Stripe vars — see [Multi-tenant mode](/self-hosting/multi-tenant/).
+3. **TLS check:** Caddy calls `GET /api/tls-check?domain=tenant.yourservice.com` before issuing. SyncBins returns 200 only if that subdomain exists in the `tenants` table — prevents random LE cert minting.
+4. **Signup:** Tenants are created at apex via `POST /api/signup`; users finish onboarding on `https://slug.yourservice.com`.
+</Steps>
+
+## Dev / local (no TLS)
+
+`npm run dev:compose` serves **http://localhost:5173** with Vite proxying `/api` and `/ws` to the server. No Caddy, no certificates — fine for local hacking only.
+
+## Common issues
+
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| Certificate never provisions | Port 80 blocked | Open 80/443; LE needs reachability |
+| `tls-check` 404 | Subdomain not in DB (multi-tenant) | Sign up tenant first |
+| Browser shows HTTP content | Hitting `:8080` directly | Use Caddy on 443 |
+| Wrong site / 404 tenant | DNS points to box but wrong slug | Check `BASE_DOMAIN` and Host header |
+
+More: [Troubleshooting](/self-hosting/troubleshooting/).
+
+## Going deeper
+
+<CardGrid>
+  <LinkCard
+    title="Quick start with Docker"
+    description="Bring the stack up."
+    href="/self-hosting/quickstart/"
+  />
+  <LinkCard
+    title="Multi-tenant mode"
+    description="Signup, Stripe, on-demand TLS details."
+    href="/self-hosting/multi-tenant/"
+  />
+  <LinkCard
+    title="Configuration reference"
+    description="DOMAIN, BASE_DOMAIN, TENANT_MODE."
+    href="/self-hosting/config/"
+  />
+</CardGrid>

@@ -1,14 +1,130 @@
 ---
 title: Encryption envelope
-description: Exact byte layout of the on-wire `ct` field — nonce, AAD, ciphertext, auth tag. Wrapped-key bundle shape per device pubkey. Useful when implementing a non-JS client.
+description: On-wire shapes for inline items and blob-backed payloads — what the server stores and how clients encrypt/decrypt.
 sidebar:
   order: 3
 ---
 
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-Exact byte layout of the on-wire `ct` field — nonce, AAD, ciphertext, auth tag. Wrapped-key bundle shape per device pubkey. Useful when implementing a non-JS client.
+The server never sees item plaintext. It stores an **envelope**: ciphertext, nonce, and a **wrapped-key bundle** — one sealed item key per device that should decrypt the row.
 
-<Aside type="note" title="Coming soon">
-This page is part of the redesigned IA but the content hasn't landed yet. The KNOWLEDGE-BASE doc has a draft outline; drop a comment on [the docs issue](https://github.com/SyncBins/Docs/issues) if you want to help write it.
-</Aside>
+Types are defined in `App/shared/src/envelope.ts` and validated via `ItemEnvelopeSchema` in `shared/src/api.ts`.
+
+## Primitives (recap)
+
+| Step | Algorithm |
+|------|-----------|
+| Item body | XChaCha20-Poly1305 (`crypto_aead_xchacha20poly1305_ietf_*`) |
+| Wrap `K_item` to each device | Curve25519 sealed box (`crypto_box_seal`) |
+| Master key from phrase | Argon2id + BIP39 seed |
+
+Full threat model: [How encryption works](/concepts/encryption/).
+
+## Inline envelope (`payloadEnc`)
+
+Stored as JSON in SQLite column `payload_enc`:
+
+```ts
+interface ItemEnvelope {
+  ct: string;    // base64 ciphertext + poly1305 tag
+  nonce: string; // base64, 24-byte XChaCha20 nonce
+  keys: Record<DeviceId, string>; // base64 sealed K_item per device pubkey
+}
+```
+
+### Encryption (client write)
+
+1. `K_item = randomBytes(32)`
+2. `nonce = randomBytes(24)`
+3. Build AAD as UTF-8 bytes of `binId + "|" + type + "|" + ts` — server validates these wire fields match AAD
+4. `ct = AEAD_Encrypt(K_item, nonce, plaintextJSON, aad)`
+5. For each non-revoked device: `keys[deviceId] = crypto_box_seal(K_item, devicePubkey)`
+6. `POST /api/items` with `{ payloadEnc: { ct, nonce, keys }, … }`
+
+### Decryption (client read)
+
+1. `K_item = crypto_box_seal_open(keys[myDeviceId], myPubkey, myPrivkey)`
+2. Reconstruct same AAD from row metadata
+3. `plaintext = AEAD_Decrypt(K_item, nonce, ct, aad)`
+
+If `keys` lacks an entry for this device, decryption fails — run re-wrap from a device that still has access, or the item predates pairing and was never re-wrapped.
+
+## Blob-backed items
+
+Large payloads store bytes in object storage; the item row references them:
+
+```ts
+interface BlobEnvelope {
+  blobRef: string;   // opaque name, e.g. ULID.bin
+  nonce: string;     // blob encryption nonce
+  keys: Record<DeviceId, string>; // K_blob wrapped like inline
+}
+```
+
+Wire fields on `ItemRow`: `blobRef`, `blobNonce`, `blobKeys` — with `payloadEnc: null`.
+
+Flow:
+
+1. Encrypt file bytes locally → ciphertext blob
+2. `POST /api/blobs/upload-url` → presigned PUT
+3. Upload ciphertext
+4. `POST /api/items` with metadata payload (small JSON in `payloadEnc`) **or** metadata-only inline fields plus blob refs — large media types use `blobRef` on the row and encrypted metadata in `payloadEnc` when present
+
+Exactly **one** of inline `payloadEnc` body **or** blob path is enforced at the API layer.
+
+Download: `GET /api/blobs/:ref/url` → presigned GET → decrypt with `blobNonce` + wrapped key.
+
+## Wrapped-key bundle rules
+
+- Every **non-revoked** paired device must appear in `keys` on write (server validates).
+- New device joins → existing clients **re-wrap** items they can decrypt (background job in web client).
+- Revoked devices are omitted from new writes; old ciphertext may still exist on their disk.
+
+## Base64 encoding
+
+REST API uses **standard base64** in JSON (see [REST API conventions](/reference/rest/#conventions)). Internal crypto helpers may use base64url in browser storage — convert at the HTTP boundary to match zod schemas.
+
+## AAD binding
+
+AAD is the UTF-8 string `binId|type|ts` (three wire fields joined by pipe characters).
+
+If an attacker with DB access swaps ciphertext between rows without re-encrypting, authentication fails on decrypt. The server checks `binId`, `type`, and `ts` on the wire match what the client claims.
+
+## Example PUT body (inline link)
+
+```json
+{
+  "id": "01JC4MXXXXXXXXXXXXXX",
+  "binId": "inbox",
+  "type": "link",
+  "ts": 1716000000000,
+  "payloadEnc": {
+    "ct": "base64…",
+    "nonce": "base64…",
+    "keys": {
+      "01JB…": "base64…"
+    }
+  }
+}
+```
+
+## Going deeper
+
+<CardGrid>
+  <LinkCard
+    title="How encryption works"
+    description="Diagrams + pairing handshake."
+    href="/concepts/encryption/"
+  />
+  <LinkCard
+    title="REST API"
+    description="Items and blobs endpoints."
+    href="/reference/rest/"
+  />
+  <LinkCard
+    title="Content types"
+    description="Plaintext payload shapes before encryption."
+    href="/reference/types/"
+  />
+</CardGrid>

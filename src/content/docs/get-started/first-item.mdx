@@ -1,14 +1,112 @@
 ---
 title: Adding your first item
-description: Paste a URL, drag a screenshot, type a note. Watch the type auto-detect badge light up, then watch it sync to your other devices in under a second.
+description: Paste a URL, drag a file, or type in the composer. Items encrypt on your device and sync to every paired device in real time.
 sidebar:
   order: 3
 ---
 
-import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Steps, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-Paste a URL, drag a screenshot, type a note. Watch the type auto-detect badge light up, then watch it sync to your other devices in under a second.
+After onboarding you land in **Inbox** — the default bin. Everything below works from any bin; pick one in the sidebar first if you want items somewhere other than Inbox.
 
-<Aside type="note" title="Coming soon">
-This page is part of the redesigned IA but the content hasn't landed yet. The KNOWLEDGE-BASE doc has a draft outline; drop a comment on [the docs issue](https://github.com/SyncBins/Docs/issues) if you want to help write it.
-</Aside>
+> **INSERT SCREENSHOT HERE** — Main feed with the composer at the bottom and Inbox selected in the sidebar.
+
+## Three ways to add something
+
+### 1. Type in the composer
+
+The text box at the bottom of the feed is the fastest path for URLs, notes, and code.
+
+<Steps>
+1. Click in the composer (placeholder: *Drop anything into "Inbox"…*).
+2. Start typing. A small badge appears when the app detects **link**, **code**, or **text**:
+   - **Link** — starts with `http://`, `https://`, or looks like a domain (`example.com/…`).
+   - **Code** — contains braces or semicolons in a short snippet (heuristic, not a full parser).
+   - **Text** — everything else.
+3. Press **Enter** (desktop) or tap send (mobile). On desktop you can also use **⌘Enter** / **Ctrl+Enter**.
+</Steps>
+
+Links are saved with a placeholder title (`New link`) and description (`Fetching preview…`). Open Graph fetching is not wired up yet — edit the item later if you want a nicer title.
+
+The composer toolbar currently exposes one button: **Paste from clipboard** (reads plain text into the field). Upload, mic, and password buttons from early mockups are not in the alpha UI yet.
+
+### 2. Paste from anywhere on the page
+
+When you paste (**⌘V** / **Ctrl+V**) outside an input, SyncBins may show a **clipboard hint** — a banner offering to save what you copied as an item.
+
+Detection rules (client-side only):
+
+| Clipboard content | Saved as | Notes |
+|-------------------|----------|-------|
+| `http(s)://…` or `www.…` URL | `link` | Single line, no spaces |
+| 12–64 char token with upper, lower, digit, symbol | `password` | Service defaults to "Pasted credential" |
+| Text with ≥3% `{`/`}` characters | `code` | Label `snippet`, lang `txt` |
+| Image file in clipboard | `image` | Metadata only until blob upload completes |
+| Other text | `text` | Full string preserved |
+
+Accept the hint to drop the item into the active bin (or Inbox if you're on **Everything**).
+
+> **INSERT SCREENSHOT HERE** — Clipboard hint banner above the feed.
+
+### 3. Drag and drop files
+
+Drag one or more files onto the feed window.
+
+- **Images** (`image/*`) → `image` items with filename as label.
+- **Everything else** → `file` items with name, human-readable size, and extension as `kind`.
+
+Large files are encrypted locally and uploaded via the blob flow (see [Content types → blobs](/reference/types/#large-items-blobs)).
+
+> **INSERT SCREENSHOT HERE** — Drag overlay while dragging a file onto the window.
+
+## What happens when you send
+
+<Steps>
+1. The browser picks a random item key, encrypts the payload with XChaCha20-Poly1305, and wraps that key for **every paired device**.
+2. The ciphertext goes to `POST /api/items` (or blob storage first for large payloads).
+3. The server assigns a monotonic **version** and fans the item out over WebSocket to your other devices.
+4. Other devices decrypt and show the item in the feed — usually within a second if they're online.
+</Steps>
+
+While the request is in flight you'll see a syncing indicator on the row. If it fails, an error appears above the composer; the optimistic row may roll back.
+
+## Bins
+
+New accounts start with **Inbox**. Create more bins from the **+** button in the sidebar (**New bin** modal: name, emoji, hue, soft capacity).
+
+The **Everything** view at the top of the sidebar shows all non-deleted items across bins, sorted by time. Search (**⌘K** / **Ctrl+K**, or click the sidebar search field) runs entirely on-device over decrypted payloads — the server never sees your query.
+
+## All ten types
+
+The composer and clipboard paths only auto-create **link**, **code**, **text**, **password**, **image**, and **file** today. The server and UI also support **note**, **video**, **audio**, **contact**, and **location** — those need to be created through other flows (or MCP/API) until dedicated UI lands.
+
+See [Content types](/reference/types/) for every payload shape.
+
+## Troubleshooting
+
+| Problem | What to do |
+|---------|------------|
+| Item stuck on "syncing" | Check Settings → Server (green?). Self-host: `curl …/api/health`. |
+| Other device doesn't show it | Confirm both devices are paired and online. Check WebSocket in browser devtools. |
+| Can't decrypt on new device | Existing devices re-wrap items for new pairings in the background; wait a minute and refresh. |
+| Paste hint never appears | Browser blocked clipboard read — use the composer paste button or type manually. |
+
+## Next steps
+
+<CardGrid>
+  <LinkCard
+    title="Pairing more devices"
+    description="Six-word code from Settings → Devices."
+    href="/get-started/pairing/"
+  />
+  <LinkCard
+    title="How sync works"
+    description="WebSocket fanout and version numbers."
+    href="/concepts/sync/"
+  />
+  <LinkCard
+    title="Content types"
+    description="All ten payload shapes."
+    href="/reference/types/"
+  />
+</CardGrid>

@@ -1,14 +1,61 @@
 ---
 title: Roadmap
-description: What we're working on, what's up next, what's parked. Honest about the parked stuff.
+description: What SyncBins is building toward — only items we can point to in repos or UI placeholders, not a fantasy backlog.
 sidebar:
   order: 2
 ---
 
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-What we're working on, what's up next, what's parked. Honest about the parked stuff.
+Roadmaps lie easily. This page lists **directional** work with evidence in the monorepo today — empty repos, "Coming soon" UI, or comments in code — plus what is **already shipped**.
 
-<Aside type="note" title="Coming soon">
-This page is part of the redesigned IA but the content hasn't landed yet. The KNOWLEDGE-BASE doc has a draft outline; drop a comment on [the docs issue](https://github.com/SyncBins/Docs/issues) if you want to help write it.
+## Shipped (use it now)
+
+- Web app with E2E encryption, bins, real-time sync
+- Self-hosted Docker stack + Caddy TLS
+- Multi-tenant mode + signup + Stripe wiring (hosted shape)
+- MCP server (`@syncbins/mcp`) — four tools
+- Quick-unlock PIN, recovery phrase onboarding, device revoke
+
+## In progress / visible placeholders
+
+| Area | Evidence | Docs |
+|------|----------|------|
+| **Automated backups** | Settings → Backups "Coming soon" pane | [Backups](/self-hosting/backups/) |
+| **Link preview / OG fetch** | Items save `Fetching preview…` placeholder | [Content types](/reference/types/) |
+| **QR pair scanning** | `QRPlaceholder` in Devices UI | [Pairing](/get-started/pairing/) |
+| **Browser extension** | Empty Extension repo | [Extension](/integrations/extension/) |
+| **Mobile apps** | Empty Mobile repo | [Mobile](/integrations/mobile/) |
+| **Native desktop** | No repo yet | [Desktop](/integrations/desktop/) |
+| **Composer tools** | Paste button only; no mic/upload/password toolbar | [First item](/get-started/first-item/) |
+| **Sidebar storage meter** | Hardcoded placeholder in UI | — |
+
+## Not committed (don't ask support yet)
+
+- Server-side export/import of vault archives (recovery = phrase + re-pair only)
+- Trash / undelete for deleted items (delete is soft on server, hidden in UI)
+- Generic AWS S3 `STORAGE_KIND` (use R2 or Azure today)
+- Session token auto-renewal past 30 days
+- Post-quantum crypto (mentioned as future in concept docs only — not in code)
+
+<Aside type="caution" title="No dates">
+We are not publishing ETAs. When a feature lands in `main`, the corresponding doc page gets updated and this list shrinks.
 </Aside>
+
+## How to influence priority
+
+- [GitHub Discussions / Issues on App](https://github.com/SyncBins/App/issues)
+- [Docs issues](https://github.com/SyncBins/Docs/issues) for documentation gaps
+
+<CardGrid>
+  <LinkCard
+    title="Changelog"
+    description="Tagged release history."
+    href="/project/changelog/"
+  />
+  <LinkCard
+    title="Welcome"
+    description="What SyncBins is today."
+    href="/get-started/welcome/"
+  />
+</CardGrid>

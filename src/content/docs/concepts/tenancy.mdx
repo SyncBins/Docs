@@ -1,14 +1,77 @@
 ---
 title: Multi-tenant vs single
-description: Conceptual differences between the two modes. When you want which. Trade-offs in operational complexity, blast radius, and feature set.
+description: Single-tenant is one vault on your box. Multi-tenant is syncbins.com-style hosting — many subdomains, one server process, shared SQLite with tenant_id rows.
 sidebar:
   order: 4
 ---
 
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-Conceptual differences between the two modes. When you want which. Trade-offs in operational complexity, blast radius, and feature set.
+The SyncBins server supports two deployment modes, selected by `TENANT_MODE`:
 
-<Aside type="note" title="Coming soon">
-This page is part of the redesigned IA but the content hasn't landed yet. The KNOWLEDGE-BASE doc has a draft outline; drop a comment on [the docs issue](https://github.com/SyncBins/Docs/issues) if you want to help write it.
+| | `single` (default) | `multi` |
+|---|-------------------|---------|
+| **Audience** | Self-hosters, homelab | Hosted syncbins.com, small SaaS operators |
+| **Vaults** | One (`tenant_id = default`) | One per subdomain (`gavin.syncbins.com`) |
+| **Signup** | First device to finish onboarding claims the server | `POST /api/signup` on apex domain |
+| **Billing** | Off | Optional Stripe (`STRIPE_BILLING_ENABLED`) |
+| **TLS** | One hostname in Caddy | Wildcard + on-demand certs via `/api/tls-check` |
+
+Both modes run the **same Fastify + React binary**. Only environment and DNS differ.
+
+## Single-tenant (what most self-hosters want)
+
+- All data lives in one SQLite file (`SQLITE_PATH`, default `./data/syncbins.db`).
+- Blob storage is one prefix (`LOCAL_BLOB_DIR` or one bucket).
+- No subdomain routing — your `DOMAIN` points straight at the box.
+- `STORAGE_CAP_BYTES=0` means unlimited quota (default).
+
+If you only need SyncBins for yourself (or one household), stay here. Running two single-tenant instances on two domains is often simpler than multi-tenant.
+
+## Multi-tenant (hosted service shape)
+
+- Still **one SQLite database** — rows are scoped by `tenant_id` on devices, items, bins, etc. (not separate DB files per user).
+- Hostname middleware resolves `slug.BASE_DOMAIN` → tenant row. Unknown slug → 404. Inactive subscription → 402 after grace period.
+- Caddy **on-demand TLS** asks `GET /api/tls-check?domain=slug.syncbins.com` before issuing a cert (prevents LE abuse).
+- Stripe webhooks update tenant `active` / `grace_until` when billing is enabled.
+
+Each tenant is still **one user with one recovery phrase** — no orgs, no shared bins, no multi-user vaults.
+
+<Aside type="caution" title="Operational weight">
+Multi-tenant adds wildcard DNS, Stripe, suspension logic, and apex signup flows. See [Multi-tenant mode](/self-hosting/multi-tenant/) only if you're operating a service for others.
 </Aside>
+
+## What does not change between modes
+
+- End-to-end encryption model (server sees ciphertext + metadata only).
+- Device pairing handshake.
+- WebSocket + REST sync protocol.
+- Content types and MCP integration.
+
+## Choosing a mode
+
+| You want… | Use |
+|-----------|-----|
+| A box for me on `box.example.com` | `TENANT_MODE=single` |
+| `syncbins.com` with `{name}.syncbins.com` signups | `TENANT_MODE=multi` + Stripe vars |
+| Two unrelated people, minimal ops | Two single-tenant servers, not one multi-tenant |
+
+## Going deeper
+
+<CardGrid>
+  <LinkCard
+    title="Quick start (single-tenant)"
+    description="Docker compose for one vault."
+    href="/self-hosting/quickstart/"
+  />
+  <LinkCard
+    title="Multi-tenant mode"
+    description="Caddy, signup, Stripe setup."
+    href="/self-hosting/multi-tenant/"
+  />
+  <LinkCard
+    title="Configuration reference"
+    description="TENANT_MODE, BASE_DOMAIN, Stripe env vars."
+    href="/self-hosting/config/#tenancy--billing"
+  />
+</CardGrid>

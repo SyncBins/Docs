@@ -1,14 +1,102 @@
 ---
 title: Upgrades
-description: The project follows semver. Minor/patch releases are `docker compose pull && docker compose up -d`. Major releases include a migration note and a rollback plan.
+description: Pull a new container image, restart compose, and verify health. Schema migrations run automatically at boot.
 sidebar:
   order: 5
 ---
 
-import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Steps, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-The project follows semver. Minor/patch releases are `docker compose pull && docker compose up -d`. Major releases include a migration note and a rollback plan.
+SyncBins is pre-1.0 (alpha). Treat upgrades as **backup first, pull second, verify third**.
 
-<Aside type="note" title="Coming soon">
-This page is part of the redesigned IA but the content hasn't landed yet. The KNOWLEDGE-BASE doc has a draft outline; drop a comment on [the docs issue](https://github.com/SyncBins/Docs/issues) if you want to help write it.
-</Aside>
+## Standard upgrade (Docker)
+
+<Steps>
+1. **Back up** — see [Backups & restore](/self-hosting/backups/). At minimum copy `syncbins.db` and `blobs/`.
+2. **Pull the new image:**
+   ```sh
+   cd App/docker
+   docker compose pull syncbins
+   ```
+3. **Recreate the container:**
+   ```sh
+   docker compose up -d
+   ```
+4. **Check logs:**
+   ```sh
+   docker compose logs -f syncbins --tail=100
+   ```
+   Look for a clean boot — no migration errors, `listening on 0.0.0.0:8080`.
+5. **Smoke test:**
+   ```sh
+   curl -s https://your-domain/api/health
+   ```
+   Unlock the UI, send a test item, confirm sync on a second device if you have one.
+</Steps>
+
+Caddy usually does not need upgrading unless you change `Caddyfile` — `docker compose pull caddy` when you do.
+
+## Database migrations
+
+The server runs idempotent SQL from `server/src/db/schema.sql` on every boot (`IF NOT EXISTS`). New columns and tables land automatically when you upgrade the binary.
+
+There is **no down-migration** — rollback means restoring the previous image **and** the SQLite/blob backup from before the upgrade.
+
+## Release channels
+
+| Channel | How to get it |
+|---------|---------------|
+| **GHCR latest** | `ghcr.io/syncbins/syncbins:latest` (compose default) |
+| **Tagged alpha** | GitHub Releases deploy zip + image tag (e.g. `v0.1.0-alpha.1`) |
+| **From source** | `git pull`, `npm run build`, rebuild Docker image locally |
+
+Release tags trigger CI that builds the image and attaches a deploy bundle — see [App README](https://github.com/SyncBins/App#cut-an-alpha-release-maintainers).
+
+## Versioning expectations
+
+Semver is the goal, but breaking changes may still land before 1.0. Read release notes on GitHub when skipping more than one tag.
+
+- **Patch/minor:** usually safe — pull and restart.
+- **Major / alpha tag:** read migration notes, run backup drill, plan rollback.
+
+## Rollback
+
+<Steps>
+1. Stop compose: `docker compose down`
+2. Restore `syncbins.db` (+ blobs) from backup.
+3. Pin the previous image tag in `docker-compose.yml` or `docker compose pull` the old digest.
+4. `docker compose up -d` and verify `/api/health`.
+</Steps>
+
+## Native / dev installs
+
+If you run from source without Docker:
+
+```sh
+git pull
+npm install
+npm run build
+npm run dev:server   # or restart your process manager
+```
+
+Rebuild `better-sqlite3` if Node version changed: `npm run rebuild:native`.
+
+## Going deeper
+
+<CardGrid>
+  <LinkCard
+    title="Backups & restore"
+    description="Snapshot before every upgrade."
+    href="/self-hosting/backups/"
+  />
+  <LinkCard
+    title="Troubleshooting"
+    description="When health check fails after upgrade."
+    href="/self-hosting/troubleshooting/"
+  />
+  <LinkCard
+    title="Changelog"
+    description="Per-release notes (as we publish them)."
+    href="/project/changelog/"
+  />
+</CardGrid>

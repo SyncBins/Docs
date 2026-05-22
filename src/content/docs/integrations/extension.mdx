@@ -1,14 +1,37 @@
 ---
 title: Browser extension
-description: Right-click → Save to SyncBins. Manifest V3 extension that captures URLs, selections, and full-page screenshots. The `Extension` repo is currently empty — this page reserves the spot.
+description: Save links and clips from any tab into SyncBins. Not shipped yet — the Extension repo is a placeholder.
 sidebar:
   order: 2
+  badge:
+    text: Soon
+    variant: note
 ---
 
-import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, LinkCard } from '@astrojs/starlight/components';
 
-Right-click → Save to SyncBins. Manifest V3 extension that captures URLs, selections, and full-page screenshots. The `Extension` repo is currently empty — this page reserves the spot.
+A SyncBins browser extension is planned — quick capture from the toolbar, pair as a device, same encryption envelope as the web app.
 
-<Aside type="note" title="Coming soon">
-This page is part of the redesigned IA but the content hasn't landed yet. The KNOWLEDGE-BASE doc has a draft outline; drop a comment on [the docs issue](https://github.com/SyncBins/Docs/issues) if you want to help write it.
+## Status today
+
+**Not available.** The [Extension](https://github.com/SyncBins/Extension) repository exists but contains no extension code yet. There is nothing to install.
+
+## What works instead (now)
+
+Use the web app at [syncbins.com](https://syncbins.com) or your self-hosted URL:
+
+- Paste URLs or text in the [composer](/get-started/first-item/)
+- Use the clipboard hint when copying on the same machine
+- Pair the browser as a device ([Pairing more devices](/get-started/pairing/))
+
+For agents, use the [MCP server](/integrations/mcp/) — that **is** shipping today.
+
+<Aside type="note" title="Living doc">
+When the extension reaches a testable build, this page will document install steps, permissions, and pairing. Until then we won't speculate on manifest v3 details or store listings.
 </Aside>
+
+<LinkCard
+  title="MCP server"
+  description="Available today for Cursor and Claude Desktop."
+  href="/integrations/mcp/"
+/>

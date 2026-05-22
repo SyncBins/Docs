@@ -115,7 +115,7 @@ Four tools, deliberately small. Every call goes through the same encryption enve
   </Fragment>
 </Endpoint>
 
-<Endpoint method="DELETE" path="sb_delete_item" tag="write" desc="Soft-delete by ID. Recoverable from trash for 30 days.">
+<Endpoint method="DELETE" path="sb_delete_item" tag="write" desc="Soft-delete by ID. Hidden in the UI on all devices; no trash restore API yet.">
   <Fragment slot="params">
     - **`id`** `string` *required* — ULID. Must be a known item.
   </Fragment>

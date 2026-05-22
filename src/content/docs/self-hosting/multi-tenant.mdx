@@ -1,6 +1,6 @@
 ---
 title: Multi-tenant mode
-description: Run SyncBins as a hosted service for multiple users — subdomain routing, on-demand TLS via Caddy, Stripe billing. The undocumented half of the server.
+description: Run SyncBins like syncbins.com — subdomain per vault, signup on the apex domain, optional Stripe billing. Same Fastify server as self-hosting.
 sidebar:
   order: 7
   badge:
@@ -8,147 +8,132 @@ sidebar:
     variant: tip
 ---
 
-import { Aside, Steps, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Steps, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-By default the SyncBins server is single-tenant — one user, one bucket, one set of devices. Set `TENANT_MODE=multi` and you turn it into a SaaS: each user gets their own subdomain (`gavin.yourservice.com`), their own SQLite database, their own slice of blob storage, and (optionally) a Stripe subscription.
+Set `TENANT_MODE=multi` to host many isolated vaults on one process. Each user gets `{slug}.yourservice.com`, their own rows in shared SQLite (scoped by `tenant_id`), and optional Stripe billing.
 
-This is what powers `syncbins.com`. It's intentionally simple — no orgs, no roles, just a slug → tenant lookup.
+This powers **syncbins.com**. Most self-hosters should keep `TENANT_MODE=single`.
 
-<Aside type="caution" title="Niche feature, on purpose">
-99% of self-hosters want single-tenant. If you're hosting just yourself + family, run multiple single-tenant servers on different domains and skip this page. Multi-tenant exists for people running SyncBins as a small commercial service.
+<Aside type="caution" title="Niche feature">
+If you only need SyncBins for yourself, use [single-tenant quick start](/self-hosting/quickstart/). Multi-tenant adds wildcard DNS, signup flows, suspension logic, and operational responsibility for other people's data.
 </Aside>
 
 ## What you get
 
-- **Subdomain routing.** `{slug}.yourservice.com` resolves to that tenant's SQLite DB and blob prefix.
-- **Self-signup.** `POST /api/signup` creates a tenant + provisions DNS-checked TLS.
-- **Per-tenant blob isolation.** Items live under `tenants/{slug}/{item_id}.bin` in the bucket.
-- **Stripe webhooks.** Subscription state syncs to the tenant row; over-quota tenants get a soft suspend.
-- **Tenant admin.** A meta-tenant on the apex domain manages everyone else.
+- **Subdomain routing** — `Host: slug.yourservice.com` resolves to a tenant row.
+- **Public signup** — `POST /api/signup` on the apex domain creates a tenant and returns the tenant URL.
+- **On-demand TLS** — Caddy asks `GET /api/tls-check?domain=…` before issuing a cert for a subdomain.
+- **Stripe (optional)** — `STRIPE_BILLING_ENABLED=true` activates checkout on signup and webhooks for subscription state.
+- **Per-tenant storage accounting** — `storage_bytes` on the tenant row; enforce caps with `STORAGE_CAP_BYTES`.
 
 ## What you don't get
 
-- No multi-user-per-tenant. Each tenant is still a single user with their own recovery phrase.
-- No cross-tenant sharing or visibility.
-- No automatic compliance features (GDPR / SOC2). You're hosting a service — that's on you.
+- Multi-user **inside** one tenant — still one recovery phrase per subdomain.
+- Cross-tenant sharing.
+- Compliance packaging (GDPR tooling, audit logs) — you operate the service.
 
-## Architecture
+## Architecture (actual)
 
 ```
-                              ┌──────────────────────┐
-   gavin.yourservice.com ────►│                      │
-   sara.yourservice.com  ────►│       Caddy          │
-   yourservice.com       ────►│  (on-demand TLS)     │
-                              └──────────┬───────────┘
-                                         │ reverse_proxy
-                              ┌──────────▼───────────┐
-                              │   SyncBins (Go)      │
-                              │  tenant router       │
-                              │  ┌──────┐ ┌──────┐  │
-                              │  │SQLite│ │SQLite│  │  one DB per tenant
-                              │  └──────┘ └──────┘  │
-                              └──────────┬───────────┘
-                                         │
-                                  ┌──────▼──────┐
-                                  │  R2 / S3    │
-                                  │  /tenants/  │
-                                  │   {slug}/   │
-                                  └─────────────┘
+  slug.yourservice.com ──► Caddy (TLS) ──► Fastify SyncBins :8080
+                                                    │
+                                            SQLite (one file)
+                                            tenant_id on all rows
+                                                    │
+                                            R2 / Azure / local blobs
 ```
 
-Each tenant gets a sub-directory `/data/tenants/{slug}/`:
+Unlike some SaaS designs, tenants share **one SQLite database** with a `tenant_id` column — not separate `db.sqlite` files per slug. Blob paths are scoped by storage adapter configuration.
 
-- `db.sqlite` — metadata for that tenant
-- `jwt.secret` — per-tenant signing key (rotated on plan change)
+Conceptual comparison: [Multi-tenant vs single](/concepts/tenancy/).
 
 ## Setup
 
 <Steps>
-1. **DNS.** Point a wildcard A record `*.yourservice.com` at your box. Also point the apex `yourservice.com`. Both IPv4 and IPv6 if you have it.
+1. **DNS** — Wildcard `*.yourservice.com` and apex `yourservice.com` → your server IP.
 
-2. **Caddyfile with on-demand TLS.** Caddy fetches a cert per-subdomain the first time it's hit:
+2. **Caddyfile** — Use on-demand TLS with the ask hook (bundled example in `App/docker/Caddyfile`):
 
-   ```caddy title="Caddyfile"
+   ```caddy
    {
      on_demand_tls {
        ask http://syncbins:8080/api/tls-check
+       interval 2m
+       burst 5
      }
    }
 
-   *.yourservice.com, yourservice.com {
-     tls {
-       on_demand
-     }
+   *.{$DOMAIN}, {$DOMAIN} {
+     tls { on_demand }
      reverse_proxy syncbins:8080
    }
    ```
 
-   The `ask` endpoint prevents Caddy from issuing certs for slugs that don't exist — important to avoid Let's Encrypt rate-limit drama.
+3. **Environment** — in `docker/.env`:
 
-3. **Server env.** Flip the mode and point at Stripe (optional):
-
-   ```ini title=".env"
+   ```ini
+   DOMAIN=yourservice.com
    TENANT_MODE=multi
-   APEX_DOMAIN=yourservice.com
-   STORAGE_BACKEND=s3
-   S3_BUCKET=yourservice
-   S3_PREFIX=tenants/
-   # ... (S3 creds)
+   BASE_DOMAIN=yourservice.com
+   BLOB_URL_SECRET=…
+   STORAGE_KIND=local   # or r2 / azure
 
-   # Stripe (optional — omit for free hosting)
-   STRIPE_SECRET_KEY=sk_live_...
-   STRIPE_WEBHOOK_SECRET=whsec_...
-   STRIPE_PRICE_PRO=price_...
+   # Optional billing
+   STRIPE_BILLING_ENABLED=true
+   STRIPE_SECRET_KEY=sk_live_…
+   STRIPE_WEBHOOK_SECRET=whsec_…
+   STRIPE_PRICE_ID=price_…
    ```
 
-4. **Sign up the first tenant.** Hit the signup endpoint:
+4. **Start compose** — `docker compose up -d` from `App/docker/`.
+
+5. **Create a tenant** — signup via UI on apex or API:
 
    ```sh
    curl -X POST https://yourservice.com/api/signup \
      -H "Content-Type: application/json" \
-     -d '{"email": "you@example.com", "slug": "gavin"}'
+     -d '{"email":"you@example.com","subdomain":"gavin"}'
    ```
 
-   Server creates `/data/tenants/gavin/`, issues a one-time bootstrap token, and emails you the link. Open it in a browser and finish onboarding as the first device for that tenant.
+   Response includes the tenant URL (e.g. `https://gavin.yourservice.com`). Open it and complete onboarding as the first device.
 
-5. **Apex tenant (admin).** The apex domain is reserved for the meta-tenant. Bootstrap it the same way you bootstrap a single-tenant server — the first device to hit `https://yourservice.com/admin` claims it. Settings → Admin lists all tenants, their plans, their storage usage.
+6. **TLS check** — first visit to `https://gavin.yourservice.com` triggers Caddy → `/api/tls-check?domain=gavin.yourservice.com` → 200 only if tenant exists.
 </Steps>
 
-## Stripe webhook setup
+## Stripe (optional)
 
-If you're charging:
+When `STRIPE_BILLING_ENABLED=true`:
 
-<Steps>
-1. In Stripe, create a webhook endpoint at `https://yourservice.com/api/billing/webhook`.
-2. Subscribe to events: `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`.
-3. Copy the signing secret into `STRIPE_WEBHOOK_SECRET`.
-4. Customer portal sessions are vended via `GET /api/billing/portal` on a paired device — no other config needed.
-</Steps>
+- Signup may redirect through Stripe Checkout before the tenant is active.
+- Webhook: `POST /api/billing/webhook` (configure in Stripe dashboard).
+- Customer portal: `GET /api/billing/portal` from a paired device.
 
-Suspension behaviour: a tenant whose subscription is `past_due` after 7 days is **soft-suspended** — items still sync (you don't want users to lose data), but new items return `403 tenant_suspended`. After 30 days, blobs are queued for deletion (you'll want a real grace-period banner before that lands).
+Inactive tenants past grace return **402 payment_required** on API routes (see tenant middleware).
 
-## Operational notes
+Exact event list and suspension timing — verify in `App/server/src/routes/` before production; do not rely on undocumented grace periods.
 
-- **Backups:** snapshot per-tenant. `litestream replicate /data/tenants/*/db.sqlite` works.
-- **Scaling:** one Go process handles ~100 tenants comfortably. Past that, shard by `hash(slug) % N` and run multiple instances behind the same Caddy.
-- **Removing a tenant:** `POST /admin/tenants/{slug}/purge` — wipes DB row, blob prefix, signing key. Irreversible.
+## Operations
+
+- **Backups:** Snapshot the whole SQLite file + blob store — all tenants together. See [Backups](/self-hosting/backups/).
+- **Logs:** `docker compose logs syncbins` — include `tenant_id` from request context when debugging.
+- **Quota:** Set `STORAGE_CAP_BYTES` per deployment; `0` = unlimited (self-host default).
 
 ## Going deeper
 
 <CardGrid>
   <LinkCard
-    title="Quick start (single-tenant)"
-    description="The 90% path — start here if you're hosting just yourself."
-    href="/self-hosting/quickstart/"
+    title="TLS & domains"
+    description="Wildcard + on-demand certs."
+    href="/self-hosting/tls/"
   />
   <LinkCard
-    title="Multi-tenant vs single"
-    description="Conceptual differences and when each is right."
-    href="/concepts/tenancy/"
+    title="Configuration reference"
+    description="All tenancy and Stripe env vars."
+    href="/self-hosting/config/#tenancy--billing"
   />
   <LinkCard
-    title="REST API → Multi-tenant"
-    description="signup, tls-check, billing endpoints."
-    href="/reference/rest/#multi-tenant-hosted"
+    title="REST API"
+    description="signup, tls-check, billing routes."
+    href="/reference/rest/"
   />
 </CardGrid>

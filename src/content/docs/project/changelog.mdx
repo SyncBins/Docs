@@ -1,14 +1,36 @@
 ---
 title: Changelog
-description: Per-release notes. Curated, not auto-generated — each entry explains the why, not just the what.
+description: Per-release notes for SyncBins. Pre-1.0 — we publish entries when tagged releases ship.
 sidebar:
   order: 1
 ---
 
-import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, LinkCard } from '@astrojs/starlight/components';
 
-Per-release notes. Curated, not auto-generated — each entry explains the why, not just the what.
+Curated release notes — not auto-generated from every commit. During alpha, watch [GitHub Releases on App](https://github.com/SyncBins/App/releases) for tags like `v0.1.0-alpha.1`.
 
-<Aside type="note" title="Coming soon">
-This page is part of the redesigned IA but the content hasn't landed yet. The KNOWLEDGE-BASE doc has a draft outline; drop a comment on [the docs issue](https://github.com/SyncBins/Docs/issues) if you want to help write it.
+## Unreleased / alpha
+
+SyncBins is **pre-1.0**. The hosted product and docs evolve together. Notable areas in the current codebase:
+
+- Web client: onboarding wizard (create / pair / restore), Inbox + bins, composer, drag/drop, clipboard hint, device pairing, quick-unlock PIN, Settings panes
+- Server: Fastify REST + WebSocket, SQLite, local/R2/Azure blobs, single- and multi-tenant modes, Stripe hooks (hosted)
+- Integrations: `@syncbins/mcp` MCP tools
+
+This list describes what exists today, not a promise of stability.
+
+## How releases work (maintainers)
+
+Pushing a git tag `v0.1.0-alpha.N` triggers CI to build the Docker image (`ghcr.io/syncbins/syncbins`), push to GHCR, and attach a deploy zip. See [App README → Cut an alpha release](https://github.com/SyncBins/App#cut-an-alpha-release-maintainers).
+
+Self-hosters: [Upgrades](/self-hosting/upgrades/).
+
+<Aside type="tip" title="Docs lag code">
+These docs are living — if something here disagrees with `shared/src/*.ts` or the running app, the code wins. [Open an issue](https://github.com/SyncBins/Docs/issues).
 </Aside>
+
+<LinkCard
+  title="Roadmap"
+  description="What is explicitly not built yet."
+  href="/project/roadmap/"
+/>

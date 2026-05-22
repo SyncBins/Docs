@@ -1,14 +1,144 @@
 ---
 title: WebSocket protocol
-description: "Connection setup, message shapes (`hello`, `item`, `delete`, `caught_up`, `ping`/`pong`), heartbeat (30s ping / 90s grace), reconnect & resume semantics. Source of truth: `shared/src/ws.ts`."
+description: "Wire format at /ws — hello, item, delete, caught_up, ping/pong. Source of truth: shared/src/ws.ts."
 sidebar:
   order: 2
 ---
 
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-Connection setup, message shapes (`hello`, `item`, `delete`, `caught_up`, `ping`/`pong`), heartbeat (30s ping / 90s grace), reconnect & resume semantics. Source of truth: `shared/src/ws.ts`.
+Real-time sync uses a JSON WebSocket at **`/ws`**. Every frame is a discriminated union with a `type` field. Schemas live in `App/shared/src/ws.ts`.
 
-<Aside type="note" title="Coming soon">
-This page is part of the redesigned IA but the content hasn't landed yet. The KNOWLEDGE-BASE doc has a draft outline; drop a comment on [the docs issue](https://github.com/SyncBins/Docs/issues) if you want to help write it.
-</Aside>
+## Connection
+
+```
+wss://<host>/ws?token=<bearer_session_token>
+```
+
+The server validates the token **before** the WebSocket upgrade. Invalid or expired tokens get **HTTP 401** — no socket.
+
+After connect, the client must send **`hello`** as the first application message.
+
+## Client → server
+
+### `hello` (required first)
+
+```json
+{ "type": "hello", "since": 42 }
+```
+
+`since` is the highest **version** this client has successfully applied. Use `0` for a fresh client.
+
+The server replays all rows with `version > since` as `item` or `delete` messages, then sends `caught_up`.
+
+### `pong`
+
+```json
+{ "type": "pong" }
+```
+
+Reply to server `ping` heartbeats. Clients may also send `ping` in some implementations, but the authoritative heartbeat direction in `ws.ts` is **server → client ping**.
+
+## Server → client
+
+### `item`
+
+```json
+{
+  "type": "item",
+  "item": {
+    "id": "01JC…",
+    "binId": "inbox",
+    "type": "link",
+    "senderDevice": "01JB…",
+    "ts": 1716000000000,
+    "version": 43,
+    "deletedAt": null,
+    "payloadEnc": {
+      "ct": "…",
+      "nonce": "…",
+      "keys": { "01JB…": "…" }
+    },
+    "blobRef": null,
+    "blobNonce": null,
+    "blobKeys": null
+  }
+}
+```
+
+For blob-backed items, `payloadEnc` is `null` and `blobRef`, `blobNonce`, `blobKeys` are set. Fetch download URL via `GET /api/blobs/:ref/url`, then decrypt locally.
+
+Shape matches `ItemRowSchema` in `shared/src/api.ts`.
+
+### `delete`
+
+```json
+{
+  "type": "delete",
+  "id": "01JC…",
+  "version": 44
+}
+```
+
+Soft-delete notification. Hide the item locally; there is no trash restore API.
+
+### `caught_up`
+
+```json
+{ "type": "caught_up", "version": 44 }
+```
+
+Backlog replay finished. `version` is the current head. Subsequent messages are live pushes.
+
+### `ping`
+
+```json
+{ "type": "ping" }
+```
+
+Sent every **`WS_PING_INTERVAL_MS` = 30,000** ms. Client must respond with `pong`. Server closes the connection if it misses responses for **`WS_PONG_GRACE_MS` = 90,000** ms (two missed pongs).
+
+## What is not on the wire
+
+`WsServerMessageSchema` does **not** include an `error` message type. Malformed client frames are ignored; auth failures happen at HTTP upgrade.
+
+## Session lifecycle
+
+1. Connect with bearer token.
+2. Send `hello` with local version cursor.
+3. Apply replayed `item` / `delete` frames in order.
+4. On `caught_up`, update cursor to `version`.
+5. Apply live pushes; respond to `ping` with `pong`.
+6. On disconnect, exponential backoff reconnect; resume with latest stored version in `hello`.
+
+## Fanout rules
+
+- Device that **wrote** an item does not receive it back over WS (already optimistic locally).
+- All **other** connected devices for the tenant receive `item` or `delete` pushes.
+- Offline devices catch up on next `hello` or REST `GET /api/items?since=N`.
+
+Conceptual overview: [How sync works](/concepts/sync/).
+
+## MCP note
+
+`@syncbins/mcp` does not maintain a WebSocket — it polls REST. Same rows, higher latency.
+
+## Going deeper
+
+<CardGrid>
+  <LinkCard
+    title="REST API → Items"
+    description="Pull-based catch-up."
+    href="/reference/rest/#items"
+  />
+  <LinkCard
+    title="Encryption envelope"
+    description="Decrypting payloadEnc."
+    href="/reference/envelope/"
+  />
+  <LinkCard
+    title="Error codes"
+    description="HTTP failures (WS auth uses 401 at upgrade)."
+    href="/reference/errors/"
+  />
+</CardGrid>

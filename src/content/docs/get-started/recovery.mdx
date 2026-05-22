@@ -32,10 +32,10 @@ Revocation prevents *future* sync, not past. Items the lost device already downl
 This is treated the same as a brand-new device. You'll need to re-pair.
 
 <Steps>
-1. On a device you still have signed in, go to **Settings → Devices → Pair new device**.
-2. Get the 6-word code or QR.
-3. On the cleared browser, hit "Pair this device" and enter the code.
-4. Your bins re-sync. Existing items download as the wrapped-key bundle updates.
+1. On a device you still have, go to **Settings → Devices → Generate pair code**.
+2. Get the six words (QR is not scannable in the web app yet — type manually).
+3. On the cleared browser, open **Settings → SyncBin → Open wizard**, choose **Pair this device**, and enter the code.
+4. Your bins re-sync. Existing items download as devices re-wrap keys for the new pairing.
 </Steps>
 
 If the cleared browser was your **only paired device**, this becomes scenario 4 — see below.
@@ -69,18 +69,17 @@ The server never sees your recovery phrase. We literally cannot recover it for y
 Treat the phrase like the seed phrase for a hardware wallet. Paper, fireproof safe, password manager — pick at least two.
 </Aside>
 
-## 5. "I'm starting fresh on a new server"
+## 5. "I'm moving to a different server"
 
-You're migrating from syncbins.com to a self-hosted box (or between two self-hosted boxes). Items don't auto-migrate — you'll export and re-import.
+There is **no export/import UI** yet (Settings → Backups is a placeholder). Moving vaults means re-creating items manually or waiting for the backup/export API — not a one-click migration today.
 
-<Steps>
-1. On a device paired to the **old** server, go to **Settings → Export**.
-2. Choose "Encrypted archive" (recommended) or "Plain JSON" (only if you're moving to non-SyncBins).
-3. Download the file. The encrypted archive is unlockable only with your existing recovery phrase.
-4. On the **new** server, run the bootstrap flow ([Self-Hosting → Quick start](/self-hosting/quickstart/#bootstrap-your-first-device)).
-5. Settings → Import → upload the archive. Provide your old recovery phrase if encrypted.
-6. New device IDs, new server, same content. Revoke or shut down the old server when you're sure.
-</Steps>
+Practical options now:
+
+- Keep using the old server until export ships.
+- Re-pair all devices against the new server and re-enter important items by hand.
+- Use [MCP](/integrations/mcp/) or the [REST API](/reference/rest/) to read from the old vault and write to the new one if you build a script (both sides must be paired devices you control).
+
+When server-side encrypted export lands, this section will document the restore path.
 
 ## I'm in trouble and none of the above applies
 

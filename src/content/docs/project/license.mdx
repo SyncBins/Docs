@@ -1,14 +1,69 @@
 ---
 title: License & contributing
-description: MIT for the server, web client, mobile wrappers, browser extension. Contributing guide, code of conduct, security disclosure policy.
+description: MIT-licensed server and web client. How to run the dev stack and open a PR.
 sidebar:
   order: 3
 ---
 
-import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, LinkCard, CardGrid, Steps } from '@astrojs/starlight/components';
 
-MIT for the server, web client, mobile wrappers, browser extension. Contributing guide, code of conduct, security disclosure policy.
+## License
 
-<Aside type="note" title="Coming soon">
-This page is part of the redesigned IA but the content hasn't landed yet. The KNOWLEDGE-BASE doc has a draft outline; drop a comment on [the docs issue](https://github.com/SyncBins/Docs/issues) if you want to help write it.
-</Aside>
+The [SyncBins App](https://github.com/SyncBins/App) monorepo (server, web, shared, docker) is **MIT licensed** — see package metadata in the repo.
+
+- SyncBins and syncbins.com are the product brand.
+- Self-hosters may run, modify, and redistribute the server under MIT terms.
+- Documentation in [SyncBins/Docs](https://github.com/SyncBins/Docs) follows the same open contribution model unless noted otherwise in that repo.
+
+This is not legal advice. Read the full `LICENSE` file in each repository you use.
+
+## Contributing code
+
+<Steps>
+1. Fork and clone [SyncBins/App](https://github.com/SyncBins/App).
+2. `npm install` then `npm run dev:compose` (or native dev — see [App README](https://github.com/SyncBins/App#development)).
+3. Make focused changes; match existing style.
+4. `npm test` and `npm run typecheck` before opening a PR.
+5. Use case checklist: [docs/USE_CASES.md](https://github.com/SyncBins/App/blob/main/docs/USE_CASES.md) in the App repo.
+</Steps>
+
+Workspace notes: [server/README.md](https://github.com/SyncBins/App/tree/main/server), [web/README.md](https://github.com/SyncBins/App/tree/main/web).
+
+## Contributing documentation
+
+Docs live in [SyncBins/Docs](https://github.com/SyncBins/Docs). Every page has an **Edit page** link to GitHub.
+
+Rules we follow:
+
+- **Code wins** — `App/shared/src/*.ts` is the API/protocol source of truth.
+- **No wishlist as fact** — document shipped behavior; put futures on [Roadmap](/project/roadmap/).
+- **Screenshots** — use `INSERT SCREENSHOT HERE` until assets land.
+
+Local preview:
+
+```sh
+cd Docs
+npm install
+npm run dev    # http://localhost:4321
+```
+
+Brief for writers: [KNOWLEDGE-BASE.md](https://github.com/SyncBins/Docs/blob/main/KNOWLEDGE-BASE.md) in the Docs repo.
+
+## MCP server
+
+The MCP package (`@syncbins/mcp`) lives in a separate repository. Pair it like any device — [MCP server](/integrations/mcp/).
+
+## Going deeper
+
+<CardGrid>
+  <LinkCard
+    title="Self-hosting quick start"
+    description="Run your own box without forking."
+    href="/self-hosting/quickstart/"
+  />
+  <LinkCard
+    title="REST API"
+    description="Build on the HTTP contract."
+    href="/reference/rest/"
+  />
+</CardGrid>

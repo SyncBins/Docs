@@ -536,6 +536,15 @@ button[data-open-modal] kbd {
   text-wrap: balance;
 }
 
+.sb-hero-sync {
+  color: var(--sb-ink-0);
+}
+
+.sb-hero-bins {
+  color: var(--sb-acc);
+  text-shadow: 0 0 40px oklch(0.55 0.13 var(--sb-acc-h) / 0.45);
+}
+
 .sb-hero-accent {
   color: var(--sb-acc);
   text-shadow: 0 0 40px oklch(0.55 0.13 var(--sb-acc-h) / 0.45);
@@ -545,7 +554,7 @@ button[data-open-modal] kbd {
   font-size: 0.5em;
   font-weight: 700;
   vertical-align: super;
-  color: var(--sb-ink-1);
+  color: var(--sb-acc);
   margin-left: 0.04em;
   position: relative;
   top: -0.05em;

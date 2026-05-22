@@ -6,9 +6,8 @@ hero:
   tagline: |
     A single-user, end-to-end encrypted personal sharing portal. Self-host on a $4 VPS, or use the hosted plan. These docs cover everything from your first item to the WebSocket protocol.
   image:
-    alt: SyncBins — bins syncing across phone, laptop, tablet, watch
-    dark: /syncbins-hero.png
-    light: /syncbins-hero.png
+    alt: SyncBins logo
+    file: ../../assets/logo.svg
   actions:
     - text: Get started
       link: /get-started/welcome/
@@ -70,7 +69,7 @@ import PersonaCard from '../../components/PersonaCard.astro';
     Single Go binary or one Docker compose. BYO Azure Blob, S3, R2, or local disk.
   </Card>
   <Card title="Real-time sync" icon="bars">
-    WebSocket fanout to every paired device. Drops are visible across devices in <1s.
+    WebSocket fanout to every paired device. Drops are visible across devices in under 1s.
   </Card>
   <Card title="10 content types" icon="open-book">
     Passwords, links, code, voice memos, screenshots — each with a custom renderer.
@@ -106,7 +105,7 @@ import PersonaCard from '../../components/PersonaCard.astro';
   />
 </div>
 
-<style>
+<style>{`
   .sb-meta-row {
     display: flex;
     gap: 14px;
@@ -143,4 +142,4 @@ import PersonaCard from '../../components/PersonaCard.astro';
   @media (max-width: 880px) {
     .sb-persona-grid { grid-template-columns: 1fr; }
   }
-</style>
+`}</style>

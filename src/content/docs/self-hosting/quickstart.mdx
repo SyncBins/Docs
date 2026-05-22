@@ -1,159 +1,132 @@
 ---
 title: Quick start with Docker
-description: One compose file, one DNS record, one `docker compose up -d`. At the end you'll have https://box.yourdomain.com running your own SyncBins with auto-renewed TLS.
+description: Run the same SyncBins server locally or on your own domain — local storage by default, two env vars for production TLS.
 sidebar:
   order: 1
 ---
 
-import { Aside, Steps, Tabs, TabItem, FileTree, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Steps, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-One compose file, one DNS record, one `docker compose up -d`. At the end you'll have `https://box.yourdomain.com` running your own SyncBins with auto-renewed TLS and an Azure Blob backend.
+Self-hosters run **the same server** as syncbins.com — one Node/Fastify process serving the React app, REST API, and WebSocket relay. The web UI is identical; only who runs the box and where blobs live differs.
 
 <Aside type="tip" title="What you'll have when this is done">
-A single-process container behind a Caddy sidecar that auto-provisions Let's Encrypt certificates. The container serves the React app, the REST API, and the WebSocket relay on one port. Persistent metadata lives in SQLite; blobs live in your Azure container.
+A SyncBins instance you control. Metadata in SQLite on disk; encrypted blobs on **local disk by default** (no cloud account required). Optional: point blobs at [Cloudflare R2 or Azure](/self-hosting/storage/) via env vars.
 </Aside>
 
-## Prerequisites
+## Pick your path
 
-- A VPS or homelab box you can SSH into. A $4/mo Hetzner CX11 is plenty.
-- Docker and the `docker compose` plugin installed.
-- A domain you can point at the box. A subdomain like `box.yourdomain.com` is fine.
-- An Azure Storage Account + container (or skip ahead to [other backends](/self-hosting/storage/)).
+<Tabs syncKey="quickstart-path">
+  <TabItem label="Try it locally">
+    Best for development or testing on your machine. **No `.env` file required.**
 
-## Get it running
+    From the [App repo](https://github.com/SyncBins/App) root:
 
-<Steps>
+    ```sh
+    npm run dev:compose
+    ```
 
-1. **Point DNS at your box.** Create an A record for `box.yourdomain.com` that points to your VPS's public IPv4. If you have IPv6, add an AAAA record too. Caddy needs DNS to resolve correctly before it can fetch a certificate, so do this before the rest.
+    Open **http://localhost:5173**. The UI proxies `/api` and `/ws` to the server container. Data persists under `App/server/data/` (SQLite + `blobs/`).
 
-2. **Drop in the three files.** Make a folder on the box (anywhere — `/srv/syncbins` is conventional) and create these:
+    Stop with `Ctrl+C` or `npm run dev:compose:down`.
 
-   <FileTree>
-   - /srv/syncbins/
-     - docker-compose.yml
-     - Caddyfile
-     - .env
-     - data/ *(created on first run)*
-   </FileTree>
+    <Aside type="note">
+    This uses `docker/docker-compose.dev.yml` with `STORAGE_KIND=local` implicitly (server default) and `TENANT_MODE=single`.
+    </Aside>
+  </TabItem>
 
-   ```yaml title="docker-compose.yml"
-   services:
-     syncbins:
-       image: ghcr.io/syncbins/app:latest
-       restart: unless-stopped
-       volumes:
-         - ./data:/data
-       environment:
-         DOMAIN: ${DOMAIN}
-         STORAGE_BACKEND: azure
-         AZURE_STORAGE_CONNECTION_STRING: ${AZURE_CONN}
-         AZURE_BLOB_CONTAINER: syncbins
-         JWT_SECRET_FILE: /data/jwt.secret
-         LISTEN: ":8080"
-       expose: ["8080"]
+  <TabItem label="Production (your domain)">
+    One compose stack: SyncBins + Caddy for Let's Encrypt TLS.
 
-     caddy:
-       image: caddy:2
-       restart: unless-stopped
-       ports: ["443:443", "80:80"]
-       volumes:
-         - ./Caddyfile:/etc/caddy/Caddyfile
-         - caddy_data:/data
-         - caddy_config:/config
+    ### Prerequisites
 
-   volumes:
-     caddy_data:
-     caddy_config:
-   ```
+    - A VPS or homelab box with Docker
+    - A domain (e.g. `box.yourdomain.com`) pointing at the box
+    - Ports 80/443 open for ACME
 
-   ```caddy title="Caddyfile"
-   {$DOMAIN} {
-     reverse_proxy syncbins:8080
-     encode zstd gzip
-     header Strict-Transport-Security "max-age=31536000"
-   }
-   ```
+    ### Steps
 
-   ```ini title=".env"
-   DOMAIN=box.yourdomain.com
-   AZURE_CONN=DefaultEndpointsProtocol=https;AccountName=…;AccountKey=…
-   ```
+    <Steps>
 
-   <Aside type="tip" title="Don't have Azure?">
-   SyncBins supports four backends out of the box: **Azure Blob**, **S3**, **Cloudflare R2**, and **local disk**. The compose file above uses Azure. For the others, see [Choosing storage](/self-hosting/storage/) — the only difference is three environment variables.
-   </Aside>
+    1. **Clone the App repo** and go to the docker folder:
 
-3. **Bring it up.**
+       ```sh
+       git clone https://github.com/SyncBins/App.git
+       cd App/docker
+       cp .env.example .env
+       ```
 
-   <Tabs syncKey="install-target">
-     <TabItem label="Docker compose">
+    2. **Set two required values** in `.env`:
+
+       ```ini title="docker/.env"
+       DOMAIN=box.yourdomain.com
+       BLOB_URL_SECRET=…   # openssl rand -hex 32
+       ```
+
+       Leave `STORAGE_KIND=local` unless you want [cloud blobs](/self-hosting/storage/).
+
+    3. **Start the stack:**
+
        ```sh
        docker compose up -d
        docker compose logs -f syncbins
-       # …wait for "ready" — usually 5–10 seconds.
        ```
-     </TabItem>
-     <TabItem label="NixOS">
-       ```nix
-       # /etc/nixos/configuration.nix
-       { ... }: {
-         services.syncbins = {
-           enable = true;
-           domain = "box.yourdomain.com";
-           storage = {
-             backend = "local";
-             path = "/var/lib/syncbins/blobs";
-           };
-         };
-       }
-       ```
-     </TabItem>
-     <TabItem label="Bare binary">
-       ```sh
-       curl -L https://github.com/SyncBins/App/releases/latest/download/syncbins-linux-amd64 \
-         -o /usr/local/bin/syncbins
-       chmod +x /usr/local/bin/syncbins
-       syncbins serve --domain box.yourdomain.com --storage local
-       ```
-     </TabItem>
-   </Tabs>
 
-   Now open `https://box.yourdomain.com` in a browser. You'll land on the onboarding wizard — that's exactly the same flow described in [Get Started → Welcome](/get-started/welcome/).
+    4. **Open your URL** and complete onboarding — same wizard as hosted syncbins.com. The **first device** to finish setup becomes the bootstrap device (generates the recovery phrase and master key).
 
-4. **Bootstrap your first device.** A brand-new SyncBins server has no devices. The very first device to hit the onboarding flow becomes the *bootstrap device*: it generates the master key, the recovery phrase, and signs itself in. After that, every subsequent device gets paired through the handshake (see [How encryption works](/concepts/encryption/)).
+       <Aside type="caution" title="Bootstrap immediately">
+       Until bootstrap completes, anyone who can reach the URL could claim the server. Run onboarding yourself right after first startup.
+       </Aside>
 
-   <Aside type="caution" title="Bootstrap is one-shot">
-   Until a bootstrap device exists, anyone who can reach the URL could claim the server. Run the bootstrap flow yourself, on a device you trust, immediately after the first startup. If you need to redo it, run `syncbins reset-bootstrap` on the box.
-   </Aside>
+    5. **Verify health:**
 
-5. **Verify it's healthy.** Three quick checks:
-   - Visit `https://box.yourdomain.com/api/syncbin/status` — should return `{ "ok": true, "configured": true }`.
-   - In Settings → Server, the pulsing dot should be green and the latency under 100ms.
-   - `docker compose logs syncbins` shows no `ERROR` lines.
+       - `curl -s https://box.yourdomain.com/api/health` → `{"ok":true,"version":"0.0.0"}`
+       - Settings → Server: green status, latency shown
+       - `./data/syncbins.db` and `./data/blobs/` exist on the host
 
-</Steps>
+    </Steps>
+
+    Compose files live in `App/docker/` (`docker-compose.yml`, `Caddyfile`, `.env.example`). See the [App docker README](https://github.com/SyncBins/App/tree/main/docker) for bind-mount layout.
+  </TabItem>
+</Tabs>
+
+## What you don't need to configure
+
+For a standard **single-user self-hosted** box:
+
+| Topic | Default | Action |
+|-------|---------|--------|
+| Storage | Local disk (`./data/blobs`) | Nothing — works out of the box |
+| Tenancy | Single tenant | Keep `TENANT_MODE=single` |
+| Stripe / billing | Off | Ignore Stripe env vars |
+| R2 / Azure | Off | Only if you opt into cloud blobs |
+
+You are **not** expected to paste a wall of env vars into a Settings screen. Production needs **domain + secret**; cloud storage is an optional appendix.
+
+## Optional: cloud blob storage
+
+If local disk isn't enough, set `STORAGE_KIND=r2` or `STORAGE_KIND=azure` and the credentials from [Choosing storage](/self-hosting/storage/). Restart the container. No UI change required.
 
 ## What's next
 
 <CardGrid>
   <LinkCard
     title="Choosing storage"
-    description="Azure vs S3 vs R2 vs local — cost, latency, durability."
+    description="Local vs R2 vs Azure — when to upgrade."
     href="/self-hosting/storage/"
   />
   <LinkCard
+    title="Configuration reference"
+    description="Every env var, every default."
+    href="/self-hosting/config/"
+  />
+  <LinkCard
+    title="TLS & domains"
+    description="Caddy, certificates, wildcards."
+    href="/self-hosting/tls/"
+  />
+  <LinkCard
     title="Backups & restore"
-    description="What to snapshot, what to skip, how to verify a restore."
+    description="Snapshot SQLite + blobs."
     href="/self-hosting/backups/"
-  />
-  <LinkCard
-    title="Upgrades"
-    description="The project follows semver; rolling a release is one command."
-    href="/self-hosting/upgrades/"
-  />
-  <LinkCard
-    title="Multi-tenant mode"
-    description="Host multiple users on subdomains with Stripe billing."
-    href="/self-hosting/multi-tenant/"
   />
 </CardGrid>

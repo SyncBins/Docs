@@ -86,7 +86,7 @@ You're migrating from syncbins.com to a self-hosted box (or between two self-hos
 
 Drop a line to **gavin@syncbins.com** with as much context as you can: when it started, what device, what changed recently, what error you see (if any). Don't include your recovery phrase or PIN — ever — even with us.
 
-For self-hosted: also grab `docker compose logs syncbins --tail=200` and the output of `GET /api/syncbin/status`. Half the issues are obvious from those two.
+For self-hosted: also grab `docker compose logs syncbins --tail=200` and `curl https://your-box/api/health`. Half the issues are obvious from those two.
 
 ## Going deeper
 

@@ -1,14 +1,146 @@
 ---
 title: Configuration reference
-description: Every env var, every flag, every default. Indexed for ⌘K. Sourced from `App/server/src/config.ts`.
+description: Every env var, every flag, every default. Sourced from App/server/src/config.ts.
 sidebar:
   order: 6
 ---
 
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-Every env var, every flag, every default. Indexed for ⌘K. Sourced from `App/server/src/config.ts`.
+Every setting is **environment variables** read at server boot. There is no Settings UI for storage credentials — and there shouldn't be: R2/S3 keys belong in `.env`, Docker secrets, or your host's secret store, not in the browser.
 
-<Aside type="note" title="Coming soon">
-This page is part of the redesigned IA but the content hasn't landed yet. The KNOWLEDGE-BASE doc has a draft outline; drop a comment on [the docs issue](https://github.com/SyncBins/Docs/issues) if you want to help write it.
+<Aside type="tip" title="Most self-hosters set two vars">
+For a typical single-user box with **local disk** storage, production needs only `DOMAIN` and `BLOB_URL_SECRET`. Everything else below has a sensible default. Cloud blob storage is optional — see [Choosing storage](/self-hosting/storage/).
 </Aside>
+
+## Required vs optional (at a glance)
+
+| You are… | Set these | Leave defaults for… |
+|----------|-----------|---------------------|
+| **Trying locally** (dev compose) | Nothing | Everything — local SQLite + local blobs |
+| **Production, local blobs** | `DOMAIN`, `BLOB_URL_SECRET` | `STORAGE_KIND=local`, `TENANT_MODE=single` |
+| **Production, R2 or Azure blobs** | Above + storage block below | Stripe, multi-tenant |
+| **Running syncbins.com-style hosting** | `TENANT_MODE=multi` + Stripe vars | — |
+
+Self-hosters run **the same server binary** as hosted syncbins.com. The difference is env: single-tenant vs multi-tenant, local disk vs cloud blobs, billing on or off.
+
+## Server & persistence
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LISTEN_HOST` | `0.0.0.0` | Bind address |
+| `LISTEN_PORT` | `8080` | HTTP port (Caddy proxies here in production) |
+| `DATA_DIR` | `./data` | Base data directory |
+| `SQLITE_PATH` | `./data/syncbins.db` | SQLite metadata DB (items, devices, sessions, sync log) |
+| `LOG_LEVEL` | `info` | Pino log level: `trace` … `fatal` |
+
+In Docker production compose, `SQLITE_PATH` is usually `/data/syncbins.db` with `./data` bind-mounted on the host.
+
+## Blob storage
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `STORAGE_KIND` | `local` | `local`, `azure`, or `r2` |
+| `LOCAL_BLOB_DIR` | `./data/blobs` | Encrypted blob files when `STORAGE_KIND=local` |
+| `BLOB_URL_SECRET` | *(dev default)* | **Required in production.** 32+ char HMAC secret for signed local blob URLs. Generate: `openssl rand -hex 32` |
+
+### When `STORAGE_KIND=azure`
+
+| Variable | Required | Default |
+|----------|----------|---------|
+| `AZURE_STORAGE_CONNECTION_STRING` | yes | — |
+| `AZURE_BLOB_CONTAINER` | no | `syncbins` |
+
+### When `STORAGE_KIND=r2`
+
+| Variable | Required | Default |
+|----------|----------|---------|
+| `R2_ACCOUNT_ID` | yes | — |
+| `R2_ACCESS_KEY_ID` | yes | — |
+| `R2_SECRET_ACCESS_KEY` | yes | — |
+| `R2_BUCKET` | no | `syncbins` |
+
+R2 uses Cloudflare's S3-compatible API. There is no separate generic S3 driver today — AWS S3 would use the same presigned-URL pattern in a future driver; for now use **R2** (S3-compatible, zero egress) or **Azure**.
+
+### Signed URL TTLs
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BLOB_UPLOAD_URL_TTL_MS` | `900000` (15 min) | Presigned upload URL lifetime |
+| `BLOB_DOWNLOAD_URL_TTL_MS` | `300000` (5 min) | Presigned download URL lifetime |
+
+## Tenancy & billing
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TENANT_MODE` | `single` | `single` = one vault (`default` tenant). Self-hosters keep this. |
+| `BASE_DOMAIN` | `syncbins.com` | Used when `TENANT_MODE=multi` to build tenant URLs |
+| `STRIPE_BILLING_ENABLED` | `false` | Set `true` only for paid hosted service |
+| `STRIPE_SECRET_KEY` | — | Stripe API secret |
+| `STRIPE_WEBHOOK_SECRET` | — | Stripe webhook signing secret |
+| `STRIPE_PRICE_ID` | — | Stripe price for Pro tier |
+
+## Pairing
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PAIR_CODE_TTL_MS` | `300000` (5 min) | Pair-code lifetime |
+
+## Example `.env` files
+
+### Minimal production (local blobs)
+
+```ini title="docker/.env"
+DOMAIN=box.yourdomain.com
+BLOB_URL_SECRET=abc123…   # openssl rand -hex 32
+STORAGE_KIND=local
+TENANT_MODE=single
+```
+
+### Production with Cloudflare R2
+
+```ini title="docker/.env"
+DOMAIN=box.yourdomain.com
+BLOB_URL_SECRET=abc123…
+STORAGE_KIND=r2
+R2_ACCOUNT_ID=your-cloudflare-account-id
+R2_ACCESS_KEY_ID=…
+R2_SECRET_ACCESS_KEY=…
+R2_BUCKET=syncbins
+TENANT_MODE=single
+```
+
+### Production with Azure Blob
+
+```ini title="docker/.env"
+DOMAIN=box.yourdomain.com
+BLOB_URL_SECRET=abc123…
+STORAGE_KIND=azure
+AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=…;AccountKey=…
+AZURE_BLOB_CONTAINER=syncbins
+TENANT_MODE=single
+```
+
+<Aside type="note" title="What the web app shows">
+Settings → **Server** shows live stats from your box (latency, items, devices). It does **not** configure storage — that's deliberate. Settings → **Backups** still shows placeholder S3/R2 UI; automated backup destinations are not wired up yet.
+</Aside>
+
+## Going deeper
+
+<CardGrid>
+  <LinkCard
+    title="Quick start with Docker"
+    description="Copy the compose files and bring a box up."
+    href="/self-hosting/quickstart/"
+  />
+  <LinkCard
+    title="Choosing storage"
+    description="Local vs R2 vs Azure — when to pick each."
+    href="/self-hosting/storage/"
+  />
+  <LinkCard
+    title="Troubleshooting"
+    description="Health checks, logs, common misconfigurations."
+    href="/self-hosting/troubleshooting/"
+  />
+</CardGrid>

@@ -11,10 +11,10 @@
     "astro": "astro"
   },
   "dependencies": {
-    "@astrojs/starlight": "^0.35.0",
+    "@astrojs/starlight": "^0.39.2",
     "@fontsource/geist-mono": "^5.1.0",
     "@fontsource/geist-sans": "^5.1.0",
-    "astro": "^5.13.0",
+    "astro": "^6.3.1",
     "sharp": "^0.34.0"
   },
   "devDependencies": {

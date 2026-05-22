@@ -1,6 +1,8 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import starlightUtils from '@lorenzo_lewis/starlight-utils';
+import starlightCelestiaTheme from 'starlight-theme-celestia';
 
 // https://astro.build/config
 export default defineConfig({
@@ -8,6 +10,14 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'SyncBins',
+      plugins: [
+        starlightCelestiaTheme({ stylingSystem: 'css' }),
+        starlightUtils({
+          multiSidebar: {
+            switcherStyle: 'horizontalList',
+          },
+        }),
+      ],
       description: 'SyncBins documentation — personal sharing portal, end-to-end encrypted, self-hostable.',
       logo: {
         src: './src/assets/logo.svg',
@@ -32,10 +42,6 @@ export default defineConfig({
         baseUrl: 'https://github.com/SyncBins/Docs/edit/main/',
       },
       customCss: [
-        '@fontsource/geist-sans/400.css',
-        '@fontsource/geist-sans/500.css',
-        '@fontsource/geist-sans/600.css',
-        '@fontsource/geist-sans/700.css',
         '@fontsource/geist-mono/400.css',
         '@fontsource/geist-mono/500.css',
         './src/styles/custom.css',

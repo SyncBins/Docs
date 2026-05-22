@@ -1,8 +1,6 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
-import starlightUtils from '@lorenzo_lewis/starlight-utils';
-import starlightCelestiaTheme from 'starlight-theme-celestia';
 
 // https://astro.build/config
 export default defineConfig({
@@ -10,20 +8,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'SyncBins',
-      plugins: [
-        starlightCelestiaTheme({ stylingSystem: 'css' }),
-        starlightUtils({
-          multiSidebar: {
-            switcherStyle: 'horizontalList',
-          },
-        }),
-      ],
       description: 'SyncBins documentation — personal sharing portal, end-to-end encrypted, self-hostable.',
-      logo: {
-        src: './public/logo.png',
-        alt: 'SyncBins',
-        replacesTitle: false,
-      },
       favicon: '/favicon.svg',
       head: [
         { tag: 'link', attrs: { rel: 'icon', type: 'image/png', sizes: '96x96', href: '/favicon-96x96.png' } },
@@ -37,18 +22,21 @@ export default defineConfig({
         { tag: 'meta', attrs: { name: 'twitter:image', content: 'https://docs.syncbins.com/sbog.png' } },
       ],
       social: [
-        { icon: 'github',  label: 'GitHub',  href: 'https://github.com/SyncBins' },
-        { icon: 'discord', label: 'Discord', href: 'https://discord.gg/syncbins' },
+        { icon: 'rocket',     label: 'SyncBins',   href: 'https://syncbins.com' },
+        { icon: 'x.com',      label: 'X',          href: 'https://x.com/SyncBins' },
+        { icon: 'instagram',  label: 'Instagram',  href: 'https://instagram.com/_syncbins' },
+        { icon: 'tiktok',     label: 'TikTok',     href: 'https://www.tiktok.com/@syncbins' },
+        { icon: 'youtube',    label: 'YouTube',    href: 'https://www.youtube.com/@SyncBins' },
+        { icon: 'facebook',   label: 'Facebook',   href: 'https://facebook.com/SyncBins' },
+        { icon: 'reddit',     label: 'Reddit',     href: 'https://www.reddit.com/r/SyncBins/' },
       ],
       editLink: {
         baseUrl: 'https://github.com/SyncBins/Docs/edit/main/',
       },
       customCss: [
-        '@fontsource/geist-mono/400.css',
-        '@fontsource/geist-mono/500.css',
         './src/styles/custom.css',
       ],
-      // Persona-split sidebar — KNOWLEDGE-BASE §5 proposed IA
+      // Persona-split sidebar — vanilla Starlight collapsible groups
       sidebar: [
         {
           label: 'Get Started',
@@ -112,9 +100,10 @@ export default defineConfig({
         },
       ],
       components: {
-        // Slot in a hero with the persona cards on the landing page.
-        // We override Starlight's default Hero with our own Astro component.
-        // Hero: './src/components/Hero.astro',
+        Hero: './src/components/Hero.astro',
+        SiteTitle: './src/components/SiteTitle.astro',
+        ThemeProvider: './src/components/ThemeProvider.astro',
+        ThemeSelect: './src/components/ThemeSelect.astro',
       },
       lastUpdated: true,
     }),

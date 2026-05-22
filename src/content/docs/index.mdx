@@ -3,11 +3,9 @@ title: SyncBins Documentation
 description: SyncBins — a single-user, end-to-end encrypted personal sharing portal. Self-host or use syncbins.com. Docs cover everything from your first item to the WebSocket protocol.
 template: splash
 hero:
+  title: 'SyncBins <span class="sb-hero-accent">Docs</span>'
   tagline: |
-    A single-user, end-to-end encrypted personal sharing portal. Self-host on a $4 VPS, or use the hosted plan. These docs cover everything from your first item to the WebSocket protocol.
-  image:
-    alt: SyncBins logo
-    html: '<img src="/logo.png" alt="SyncBins logo" width="400" height="400" />'
+    A single-user, end-to-end encrypted personal sharing portal. Comprehensive docs for setup, self-hosting, and developer integration — from your first item to the WebSocket protocol.
   actions:
     - text: Get started
       link: /get-started/welcome/
@@ -27,34 +25,43 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 import PersonaCard from '../../components/PersonaCard.astro';
 
 <div class="sb-meta-row">
-  <span>app version <b>0.9.3</b></span>
-  <span>·</span>
-  <span>docs updated <b>May 21, 2026</b></span>
-  <span>·</span>
-  <span>server license <b>MIT</b></span>
-  <span>·</span>
-  <span>built with <b>Astro Starlight</b></span>
+  <span class="sb-meta-item">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7.7 12 12.5l8.7-4.8M12 22V12.5"/></svg>
+    App version <b>0.9.3</b>
+  </span>
+  <span class="sb-meta-item">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+    Docs updated <b>May 21, 2026</b>
+  </span>
+  <span class="sb-meta-item">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    Server license <b>MIT</b>
+  </span>
+  <span class="sb-meta-item">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="m12 3 1.9 5.8H20l-4.8 3.5 1.8 5.7L12 14.8 7 18l1.8-5.7L4 8.8h6.1L12 3z"/></svg>
+    Built with <span class="sb-meta-accent">Astro Starlight</span>
+  </span>
 </div>
 
 <h2 class="sb-section-h">Pick your path</h2>
 
 <div class="sb-persona-grid">
   <PersonaCard
+    icon="user"
     eyebrow="A · For users"
     title="I just want to use it"
-    description="Signed up at syncbins.com? Start here. Pair your devices, learn the bins model, set up a PIN for quick unlock, and know what to do if you ever lose a device."
     href="/get-started/welcome/"
   />
   <PersonaCard
+    icon="server"
     eyebrow="B · For self-hosters"
     title="I'm running my own server"
-    description="One Docker compose on any VPS. BYO storage — Azure Blob, S3, R2, or local disk. TLS auto-provisioned. Backups, upgrades, and multi-tenant mode all covered."
     href="/self-hosting/quickstart/"
   />
   <PersonaCard
+    icon="code"
     eyebrow="C · For developers"
     title="I'm building on it"
-    description="Complete REST and WebSocket reference. Encryption envelope spec. MCP server for agents. Every payload typed from the same zod schemas the server runs."
     href="/reference/rest/"
   />
 </div>
@@ -86,60 +93,21 @@ import PersonaCard from '../../components/PersonaCard.astro';
 
 <div class="sb-persona-grid">
   <PersonaCard
+    icon="concept"
     eyebrow="Concepts"
     title="How encryption works"
-    description="The threat model, the envelope, and what the server can actually see."
     href="/concepts/encryption/"
   />
   <PersonaCard
+    icon="docker"
     eyebrow="Self-host"
     title="Quick start with Docker"
-    description="Up and running in five minutes with one compose file and a CNAME."
     href="/self-hosting/quickstart/"
   />
   <PersonaCard
+    icon="mcp"
     eyebrow="Integrations"
     title="MCP server for agents"
-    description="Cursor, Claude Desktop, anything that speaks MCP — pair it like a device."
     href="/integrations/mcp/"
   />
 </div>
-
-<style>{`
-  .sb-meta-row {
-    display: flex;
-    gap: 14px;
-    flex-wrap: wrap;
-    padding: 12px 0;
-    margin: 28px 0 0;
-    border-top: 1px solid var(--sb-line-1);
-    border-bottom: 1px solid var(--sb-line-1);
-    font-family: 'Geist Mono', monospace;
-    font-size: 11px;
-    color: var(--sb-ink-3);
-  }
-  .sb-meta-row span b {
-    color: var(--sb-ink-1);
-    font-weight: 500;
-  }
-  .sb-section-h {
-    font-size: 14px !important;
-    font-family: 'Geist Mono', monospace !important;
-    letter-spacing: 0.1em !important;
-    text-transform: uppercase;
-    color: var(--sb-ink-3) !important;
-    margin: 56px 0 16px !important;
-    font-weight: 500 !important;
-    border: 0 !important;
-    padding: 0 !important;
-  }
-  .sb-persona-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 14px;
-    margin-bottom: 28px;
-  }
-  @media (max-width: 880px) {
-    .sb-persona-grid { grid-template-columns: 1fr; }
-  }
-`}</style>

@@ -1,90 +1,73 @@
 ---
-/**
- * Persona card for the landing page. A richer alternative to Starlight's
- * <LinkCard> when we want an eyebrow + multi-line description + arrow.
- *
- * Usage:
- *   <PersonaCard
- *     eyebrow="A · For users"
- *     title="I just want to use it"
- *     description="Signed up? Start here."
- *     href="/get-started/welcome/"
- *   />
- */
 interface Props {
   eyebrow: string;
   title: string;
-  description: string;
+  description?: string;
   href: string;
+  icon?: 'user' | 'server' | 'code' | 'concept' | 'docker' | 'mcp';
 }
-const { eyebrow, title, description, href } = Astro.props;
+
+const { eyebrow, title, description, href, icon = 'user' } = Astro.props;
 ---
 
 <a class="sb-persona" href={href}>
-  <span class="sb-persona__eyebrow">{eyebrow}</span>
-  <h3 class="sb-persona__title">{title}</h3>
-  <p class="sb-persona__desc">{description}</p>
-  <span class="sb-persona__cta">
-    Open
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M5 12h14M13 5l7 7-7 7"/>
+  <div class="sb-persona__head">
+    <svg class="sb-persona__icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      {icon === 'user' && (
+        <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z" />
+      )}
+      {icon === 'server' && (
+        <>
+          <rect x="3" y="4" width="18" height="6" rx="1.5" />
+          <rect x="3" y="14" width="18" height="6" rx="1.5" />
+          <circle cx="7" cy="7" r="1" />
+          <circle cx="7" cy="17" r="1" />
+        </>
+      )}
+      {icon === 'code' && (
+        <>
+          <path d="m8 8-4 4 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="m16 8 4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M13 6 11 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </>
+      )}
+      {icon === 'concept' && (
+        <>
+          <path d="M12 3 3 8l9 5 9-5-9-5Z" />
+          <path d="M12 11 3 16l9 5 9-5-9-5Z" opacity="0.55" />
+        </>
+      )}
+      {icon === 'docker' && (
+        <>
+          <rect x="4" y="8" width="16" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.75" />
+          <path d="M8 8V5M12 8V4M16 8V5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+        </>
+      )}
+      {icon === 'mcp' && (
+        <>
+          <rect x="8" y="7" width="8" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.75" />
+          <path d="M12 3v4M12 17v4M3 12h4M17 12h4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+        </>
+      )}
     </svg>
-  </span>
+    <span class="sb-persona__eyebrow">{eyebrow}</span>
+  </div>
+  <h3 class="sb-persona__title">{title}</h3>
+  {description && <p class="sb-persona__desc">{description}</p>}
+  <svg class="sb-persona__arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M5 12h14M13 5l7 7-7 7" />
+  </svg>
+  <svg class="sb-persona__watermark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    {icon === 'user' && <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z" />}
+    {icon === 'server' && (
+      <>
+        <rect x="3" y="4" width="18" height="6" rx="1.5" />
+        <rect x="3" y="14" width="18" height="6" rx="1.5" />
+      </>
+    )}
+    {icon === 'code' && <path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13 6l-2 12" fill="none" stroke="currentColor" stroke-width="1.5" />}
+    {icon === 'concept' && <path d="M12 3 3 8l9 5 9-5-9-5Zm0 8L3 16l9 5 9-5-9-5Z" />}
+    {icon === 'docker' && <rect x="4" y="8" width="16" height="10" rx="1.5" />}
+    {icon === 'mcp' && <rect x="8" y="7" width="8" height="10" rx="1" />}
+  </svg>
 </a>
-
-<style is:global>
-  .sb-persona {
-    display: flex;
-    flex-direction: column;
-    padding: 22px;
-    background: linear-gradient(180deg, var(--sb-bg-2), var(--sb-bg-1));
-    border: 1px solid var(--sb-line-1);
-    border-radius: var(--sb-r-l);
-    text-decoration: none !important;
-    color: inherit !important;
-    transition: border-color .15s, transform .15s, box-shadow .15s;
-    height: 100%;
-    border-bottom: 1px solid var(--sb-line-1) !important;
-  }
-  .sb-persona:hover {
-    border-color: var(--sb-acc-soft-2);
-    transform: translateY(-2px);
-    box-shadow: 0 16px 40px -16px oklch(0.4 0.1 var(--sb-acc-h) / .25);
-  }
-  .sb-persona__eyebrow {
-    font-family: 'Geist Mono', monospace;
-    font-size: 10.5px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--sb-acc);
-    margin-bottom: 14px;
-  }
-  .sb-persona__title {
-    font-size: 18px !important;
-    font-weight: 600 !important;
-    letter-spacing: -0.015em;
-    color: var(--sb-ink-0) !important;
-    margin: 0 0 6px !important;
-  }
-  .sb-persona__desc {
-    font-size: 13.5px !important;
-    color: var(--sb-ink-2) !important;
-    line-height: 1.55 !important;
-    margin: 0 0 16px !important;
-    flex: 1;
-    max-width: none !important;
-  }
-  .sb-persona__cta {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12.5px;
-    font-family: 'Geist Mono', monospace;
-    letter-spacing: 0.04em;
-    color: var(--sb-acc);
-  }
-  .sb-persona:hover .sb-persona__cta svg {
-    transform: translateX(3px);
-    transition: transform .12s;
-  }
-</style>

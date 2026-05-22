@@ -1,0 +1,38 @@
+---
+const { siteTitleHref } = Astro.locals.starlightRoute;
+---
+
+<a href={siteTitleHref} class="sb-site-title" aria-label="SyncBins home">
+  <img
+    src="/logo.png"
+    alt=""
+    width="132"
+    height="32"
+    class="sb-site-title__wordmark"
+    loading="eager"
+    decoding="async"
+  />
+</a>
+
+<style>
+  .sb-site-title {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+    color: inherit !important;
+    min-width: 0;
+  }
+
+  .sb-site-title:hover {
+    opacity: 0.92;
+  }
+
+  .sb-site-title__wordmark {
+    display: block;
+    height: calc(var(--sl-nav-height) - 2 * var(--sl-nav-pad-y));
+    width: auto;
+    max-width: min(14rem, 100%);
+    object-fit: contain;
+    object-position: left center;
+  }
+</style>

@@ -1,0 +1,28 @@
+---
+import { LinkButton } from '@astrojs/starlight/components';
+import type { StarlightRouteEntryData } from '@astrojs/starlight/route-data';
+
+const data = Astro.locals.starlightRoute.entry.data as StarlightRouteEntryData;
+const { title = data.title, tagline, actions = [] } = data.hero || {};
+---
+
+<div class="sb-hero">
+  <div class="sb-hero__copy">
+    <h1 id="_top" data-page-title set:html={title} />
+    {tagline && <p class="sb-hero__tagline" set:html={tagline} />}
+    {
+      actions.length > 0 && (
+        <div class="sb-hero__actions">
+          {actions.map(({ attrs: { class: className, ...attrs } = {}, icon, link: href, text, variant }) => (
+            <LinkButton {href} {variant} icon={icon?.name} class:list={[className]} {...attrs}>
+              {text}
+            </LinkButton>
+          ))}
+        </div>
+      )
+    }
+  </div>
+  <div class="sb-hero__visual sb-hero__visual--brand" aria-hidden="true">
+    <img src="/syncbins-hero.png" alt="" width="960" height="540" loading="eager" decoding="async" />
+  </div>
+</div>

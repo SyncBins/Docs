@@ -3,12 +3,15 @@ import { LinkButton } from '@astrojs/starlight/components';
 import type { StarlightRouteEntryData } from '@astrojs/starlight/route-data';
 
 const data = Astro.locals.starlightRoute.entry.data as StarlightRouteEntryData;
-const { title = data.title, tagline, actions = [] } = data.hero || {};
+const { tagline, actions = [] } = data.hero || {};
 ---
 
 <div class="sb-hero">
   <div class="sb-hero__copy">
-    <h1 id="_top" data-page-title set:html={title} />
+    <h1 id="_top" data-page-title class="sb-hero__title">
+      SyncBins<span class="sb-hero-tm" aria-hidden="true">™</span>{' '}
+      <span class="sb-hero-accent">Docs</span>
+    </h1>
     {tagline && <p class="sb-hero__tagline" set:html={tagline} />}
     {
       actions.length > 0 && (

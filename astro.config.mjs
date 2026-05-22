@@ -17,9 +17,9 @@ export default defineConfig({
         { tag: 'link', attrs: { rel: 'manifest', href: '/site.webmanifest' } },
         { tag: 'meta', attrs: { name: 'theme-color', content: '#0c0b0e', media: '(prefers-color-scheme: dark)' } },
         { tag: 'meta', attrs: { name: 'theme-color', content: '#faf8f5', media: '(prefers-color-scheme: light)' } },
-        { tag: 'meta', attrs: { property: 'og:image', content: 'https://docs.syncbins.com/sbog.png' } },
+        { tag: 'meta', attrs: { property: 'og:image', content: 'https://docs.syncbins.com/sdocs.png' } },
         { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
-        { tag: 'meta', attrs: { name: 'twitter:image', content: 'https://docs.syncbins.com/sbog.png' } },
+        { tag: 'meta', attrs: { name: 'twitter:image', content: 'https://docs.syncbins.com/sdocs.png' } },
       ],
       social: [
         { icon: 'rocket',     label: 'SyncBins',   href: 'https://syncbins.com' },

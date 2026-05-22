@@ -32,6 +32,10 @@ A SyncBins instance you control. Metadata in SQLite on disk; encrypted blobs on 
     <Aside type="note">
     This uses `docker/docker-compose.dev.yml` with `STORAGE_KIND=local` implicitly (server default) and `TENANT_MODE=single`.
     </Aside>
+
+    <Aside type="tip" title="Phone on Wi‑Fi?">
+    `http://192.168.x.x` is not a secure context on iOS — send/crypto can fail. Use [homelab HTTPS](/self-hosting/tls/#local-network-homelab-https) (`mkcert` + `docker-compose.dev-tls.yml`).
+    </Aside>
   </TabItem>
 
   <TabItem label="Production (your domain)">

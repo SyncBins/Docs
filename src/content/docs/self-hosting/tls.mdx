@@ -64,6 +64,104 @@ curl -s https://box.yourdomain.com/api/health
 
 Browser padlock + green **Settings → Server** status confirms end-to-end.
 
+## Local network / homelab HTTPS
+
+<Aside type="caution" title="Why this matters">
+Modern browsers (especially **iOS Safari and Chrome**) only expose full Web Crypto in a **secure context** — HTTPS, or `localhost` on the same machine. Hitting `http://192.168.0.23:5173` from a phone works for loading the UI but can break **send**, **encryption**, and **pairing**.
+
+Let's Encrypt **cannot** issue certificates for private IP addresses or names the public internet cannot validate. Homelab users need locally-trusted HTTPS instead.
+</Aside>
+
+Pick one of the paths below. All assume you use a **hostname** (not a bare IP) in the browser — e.g. `box.lan` or `syncbins.home` — that resolves to your server on the LAN via router DNS, Pi-hole, or `/etc/hosts`.
+
+<Tabs syncKey="local-tls">
+  <TabItem label="mkcert (recommended)">
+    [mkcert](https://github.com/FiloSottile/mkcert) creates a local CA and installs it on the machine running Docker. You trust that root once on each phone/laptop.
+
+    <Steps>
+    1. Install mkcert on the host.
+    2. From `App/docker/`:
+       ```sh
+       mkcert -install
+       mkcert box.lan
+       mv box.lan.pem box.lan-key.pem certs/
+       ```
+    3. Set in `.env`: `DOMAIN=box.lan` and `BLOB_URL_SECRET=…`
+    4. Start production stack with local TLS:
+       ```sh
+       docker compose -f docker-compose.yml -f docker-compose.local-tls.yml up -d
+       ```
+    5. Open **https://box.lan** (port 443).
+    </Steps>
+
+    Repo files: `docker/Caddyfile.local`, `docker/docker-compose.local-tls.yml`, `docker/certs/README.md`.
+
+    **Trust on iOS:** copy mkcert's `rootCA.pem` (`mkcert -CAROOT`) to the phone → install profile → Settings → General → About → **Certificate Trust Settings** → enable full trust for the mkcert root.
+
+    <Aside type="tip" title="Windows">
+    ```powershell
+    winget install FiloSottile.mkcert
+    # or download mkcert-v*-windows-amd64.exe from GitHub releases → mkcert.exe on PATH
+
+    cd App\docker
+    mkcert -install        # Admin PowerShell, once
+    mkcert box.lan
+    Move-Item -Force box.lan.pem, box.lan-key.pem certs\
+
+    # hosts file (Admin): 192.168.0.23  box.lan
+    $env:DOMAIN = "box.lan"
+    docker compose -f docker-compose.dev.yml -f docker-compose.dev-tls.yml up
+    ```
+    iPhone needs **router/Pi-hole DNS** for `box.lan` (the PC `hosts` file does not apply to the phone). Root CA path: `%LOCALAPPDATA%\mkcert\rootCA.pem`. See `App/docker/certs/README.md`.
+    </Aside>
+  </TabItem>
+
+  <TabItem label="Dev stack (:5173)">
+    Same mkcert certs; HTTPS on the Vite dev server for phone testing while hacking:
+
+    ```sh
+    cd App/docker
+    mkcert box.lan
+    mv box.lan.pem box.lan-key.pem certs/
+    DOMAIN=box.lan docker compose -f docker-compose.dev.yml -f docker-compose.dev-tls.yml up
+    ```
+
+    Open **https://box.lan:5173**. Vite reads `VITE_HTTPS_CERT` / `VITE_HTTPS_KEY` (set in `docker-compose.dev-tls.yml`).
+
+    Native dev without Docker:
+    ```sh
+    VITE_HTTPS_CERT=../docker/certs/box.lan.pem \
+    VITE_HTTPS_KEY=../docker/certs/box.lan-key.pem \
+    npm run dev:web
+    ```
+  </TabItem>
+
+  <TabItem label="Public domain + split DNS">
+    If you already own `box.yourdomain.com` and can point it at your LAN IP **from inside your network** (split-horizon DNS or Pi-hole), the normal [production Caddy + Let's Encrypt](#single-tenant-one-hostname) path works — no mkcert.
+
+    Requirements:
+    - Public DNS or DNS-01 ACME (bundled Caddyfile uses HTTP-01 on port 80).
+    - Port 80 reachable from the internet **or** use Caddy's DNS challenge for your provider (not in the default compose — advanced).
+
+    Best when your box is reachable on the public internet anyway; overkill for pure offline LAN.
+  </TabItem>
+
+  <TabItem label="Caddy internal (quick test)">
+    Caddy can mint a **private CA** with `tls internal` in the Caddyfile. No mkcert install, but **every device** must manually trust Caddy's root — tedious on iOS, fine for one laptop.
+
+    Not shipped in the default compose files; add to a custom Caddyfile if you want a five-minute desktop-only test. Prefer mkcert for anything involving phones.
+  </TabItem>
+</Tabs>
+
+### Checklist
+
+| Step | Done when |
+|------|-----------|
+| Hostname resolves on phone | `ping box.lan` or open in browser without wrong host |
+| Padlock shows HTTPS | No "Not Secure" warning (after trusting CA) |
+| API healthy | `curl -sk https://box.lan/api/health` → `{"ok":true,…}` |
+| Send works on iOS | Composer send creates a row (secure context + earlier iOS tap fix) |
+
 ## Multi-tenant (wildcard subdomains)
 
 Hosted-style: `*.syncbins.com` plus apex `syncbins.com`.
@@ -75,18 +173,20 @@ Hosted-style: `*.syncbins.com` plus apex `syncbins.com`.
 4. **Signup:** Tenants are created at apex via `POST /api/signup`; users finish onboarding on `https://slug.yourservice.com`.
 </Steps>
 
-## Dev / local (no TLS)
+## Plain HTTP (localhost only)
 
-`npm run dev:compose` serves **http://localhost:5173** with Vite proxying `/api` and `/ws` to the server. No Caddy, no certificates — fine for local hacking only.
+`npm run dev:compose` without the dev-tls overlay serves **http://localhost:5173**. Fine for desktop-only hacking on the same machine. **Do not use bare LAN IPs over HTTP for phone testing** — use [homelab HTTPS](#local-network-homelab-https) instead.
 
 ## Common issues
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
+| Send/crypto fails on phone, HTTP URL | Not a secure context | Use HTTPS + trusted cert ([homelab section](#local-network-homelab-https)) |
 | Certificate never provisions | Port 80 blocked | Open 80/443; LE needs reachability |
 | `tls-check` 404 | Subdomain not in DB (multi-tenant) | Sign up tenant first |
 | Browser shows HTTP content | Hitting `:8080` directly | Use Caddy on 443 |
 | Wrong site / 404 tenant | DNS points to box but wrong slug | Check `BASE_DOMAIN` and Host header |
+| mkcert warning on phone | Root CA not trusted | Install + enable trust for mkcert root (iOS Certificate Trust Settings) |
 
 More: [Troubleshooting](/self-hosting/troubleshooting/).
 
@@ -94,8 +194,13 @@ More: [Troubleshooting](/self-hosting/troubleshooting/).
 
 <CardGrid>
   <LinkCard
+    title="Troubleshooting"
+    description="Health checks, logs, iOS send issues."
+    href="/self-hosting/troubleshooting/"
+  />
+  <LinkCard
     title="Quick start with Docker"
-    description="Bring the stack up."
+    description="Bring the stack up (add local-tls overlay for LAN HTTPS)."
     href="/self-hosting/quickstart/"
   />
   <LinkCard

@@ -20,6 +20,7 @@
 9. [Technical stack + hosting](#9-technical-stack--hosting)
 10. [Design system notes](#10-design-system-notes)
 11. [Open questions for the redesign](#11-open-questions-for-the-redesign)
+12. [Signup, onboarding, device registration & pairing](#12-signup-onboarding-device-registration--pairing)
 
 ---
 
@@ -203,7 +204,16 @@ Below is every page that currently exists, with a one-line summary, source file,
 - Consider three-up "I want to..." cards directing to Get Started / Self-Host / Build (Persona A/B/C).
 - The 6-card feature grid is fine but could be visually richer — small illustrations or animated SVGs per feature.
 
-### Guides — Getting Started
+### Get Started — First-time setup
+
+**File:** `src/content/docs/get-started/first-setup.mdx`
+**Status:** Written (May 2026) from §12 onboarding knowledge.
+**Content:** Hosted signup, 7-step wizard, three paths (create / pair / restore), device registration, bootstrap vs pair, PIN step, troubleshooting, next-step links.
+**Redesign notes:**
+- Add screenshots of each onboarding screen when available.
+- QR pairing section can expand when feature ships.
+
+### Guides — Getting Started (legacy)
 
 **File:** `src/content/docs/guides/getting-started.md`
 **Length:** ~70 lines.
@@ -320,7 +330,7 @@ In rough priority order. Items marked **[stub today]** exist but are placeholder
 
 ### High priority
 
-1. **Quick-unlock PIN** [missing] — A feature was just added: 6+ digit PIN that wraps the master key locally with Argon2id so the user doesn't have to retype the 12-word phrase every time the browser locks. Needs a section under "Get Started" or "Concepts."
+1. **Quick-unlock PIN** — page live at `get-started/quick-unlock.mdx`; verify lockout copy against `App/web/src/crypto/pin.ts` when that code changes.
 2. **Recovery scenarios walkthrough** [missing] — "I lost my phone / I cleared my browser / I forgot my PIN / All my devices are gone / I'm starting fresh on a new server" — five real scenarios, what to do in each. This is the question users will Google.
 3. **Storage backend deep-dive** [missing] — Self-hosting page mentions Azure / S3 / R2 / local but doesn't compare them. Cost per GB, latency, durability, ease of setup. Useful for a homelabber on day one.
 4. **Multi-tenant mode** [missing] — The server supports a hosted multi-tenant mode with subdomain routing, Stripe billing, on-demand TLS via Caddy. None of this is documented. Audience is the small number of people who want to run their own SyncBins-as-a-service.
@@ -493,6 +503,231 @@ Decisions that need a human to make before the design lands:
 
 ---
 
+## 12. Signup, onboarding, device registration & pairing
+
+> **Source of truth:** `App/web/src/features/onboarding/OnboardingFlow.tsx`, `App/server/src/routes/auth.ts`, `App/server/src/auth/pair.ts`, `App/web/src/crypto/*.ts`. Use this section when writing Get Started pages — especially `get-started/first-setup.mdx` and `get-started/pairing.mdx`.
+
+This is the end-to-end story from "I don't have SyncBins yet" to "this browser is a registered, syncing device."
+
+### Two front doors: hosted signup vs self-host claim
+
+| Mode | How you arrive | What happens before onboarding |
+|------|----------------|--------------------------------|
+| **Hosted** (`you.syncbins.com`) | Waitlist → invite → `SignupPage` at syncbins.com | `POST /api/signup` with subdomain + email → tenant row created → user opens their URL |
+| **Self-hosted** (`box.example.com`) | Docker compose + DNS | No signup form. User opens the URL. **First person to finish onboarding claims the server** (single-tenant `default` tenant). |
+
+Hosted signup collects **subdomain + email only** — no password, no recovery phrase at signup time. Those happen in the in-app onboarding wizard on the tenant URL.
+
+Self-hosters must complete onboarding **immediately** after exposing the URL. Until bootstrap succeeds, anyone who can reach the URL could register the first device (`App/docker/deploy/ALPHA.md`).
+
+### The onboarding wizard (7 steps)
+
+Driven by `OnboardingFlow.tsx`. Eyebrow labels use `step N of 7 · …`.
+
+| Step | Index | Screen | Notes |
+|------|-------|--------|-------|
+| Welcome | 0 | "A place to share things with yourself." | **Let's go** → step 1. Footer links: restore / **Pair with a six-word code** (jumps to pair path). |
+| Choose path | 1 | **How are you joining?** | Three cards — see paths below. |
+| Recovery phrase | 2 | Create or restore only | Skipped on **Pair this device** path. |
+| Name device | 3 | **Name this device** | Default from UA (e.g. "Chrome on Windows"). Max 64 chars. |
+| Device setup | 4 | Bootstrap spinner or **Enter the pairing code.** | Auto bootstrap (create/restore) or 6-word entry. |
+| Quick-unlock PIN | 5 | **Set a PIN for this browser** | Skippable (**Skip for now**). See [quick-unlock.mdx](/get-started/quick-unlock/). |
+| Done | 6 | **You're in.** | Creates local **Inbox** bin (`inbox`). **Open my bins** → main feed. |
+
+There is **no "pick your starter bins" step** in the current app — only Inbox is created automatically. Older doc copy that mentions starter bins is stale.
+
+### Three onboarding paths
+
+#### A — Create a new SyncBin (`create`)
+
+For a **fresh server** (zero registered devices).
+
+1. **Your twelve magic words.** — tap **Tap to reveal**, then **I wrote them down**. Phrase can be copied or printed (PDF backup includes vault fingerprint).
+2. **Name this device** → Continue.
+3. Client derives master key from phrase (BIP39 → Argon2id), generates Curve25519 keypair, `POST /api/devices/bootstrap`.
+4. Server creates device row + 30-day session token.
+5. Client stores encrypted device secret key in IndexedDB, master key in session memory.
+6. Optional PIN → Done.
+
+#### B — Pair this device (`pair`)
+
+For a **second (or nth) device** when another device is already set up. **No recovery phrase step.**
+
+1. On existing device: Settings → Devices → **Generate pair code** (6 BIP39 words, 5-minute TTL).
+2. On new device: path B → name device → **Enter the pairing code.** → **Pair this device**.
+3. Cryptographic handshake delivers wrapped master key (see Pairing handshake below).
+4. Optional PIN → Done.
+
+QR scanning is **not implemented in alpha** — type the six words manually. `QRPlaceholder` in UI is decorative.
+
+#### C — Restore with recovery phrase (`restore`)
+
+When **all devices are lost** but the user still has the 12-word phrase.
+
+1. **Enter your recovery phrase.** — 12 word inputs; UI shows server status via `GET /api/syncbin/status` (device count, item count) and vault fingerprint.
+2. Name device → Continue.
+3. **If server has zero devices:** bootstrap like create (phrase must match new vault).
+4. **If server already has devices:** bootstrap returns **409** → UI switches to **pair-code** step. User must generate a code from a still-live device *or* use path B. Phrase alone cannot re-register without pairing when other devices exist.
+5. After pair, client verifies unwrapped master key matches phrase-derived key — mismatch → **"Recovery phrase does not match this SyncBins account."**
+6. Optional PIN → Done.
+
+### What a "device" is
+
+A **device** = one browser profile / installation registered with a SyncBin tenant.
+
+**Server stores (per device):**
+- ULID `id`, `tenant_id`, display `name`, icon `glyph` (`laptop|phone|tablet|globe`)
+- Curve25519 **public key** (32 bytes, base64url)
+- `paired_at`, `last_seen`, optional `revoked_at`
+
+**Server never stores:** recovery phrase, master key, PIN, device secret key, item plaintext.
+
+**Client stores:**
+- Session (`localStorage`, `syncbins-session-v1`): bearer token, deviceId, host, deviceName, pubKeyB64
+- Encrypted device secret key (`IndexedDB`, `syncbins-keys`) — wrapped to master key
+- Master key in **session memory** (cleared on tab close; unlock via PIN or phrase)
+- Optional PIN blob (`localStorage`, `syncbins-pin-v1`) — local only
+
+Each device has its **own** Curve25519 keypair. Item encryption keys are sealed to every active device pubkey.
+
+### Device registration API (developer reference)
+
+| Endpoint | Auth | Purpose |
+|----------|------|---------|
+| `POST /api/signup` | None | Hosted: create tenant (subdomain + email) |
+| `GET /api/syncbin/status` | None | `{ deviceCount, itemCount }` — restore probe |
+| `POST /api/devices/bootstrap` | None | First device on empty tenant |
+| `POST /api/devices/bootstrap/restart` | None | Single-tenant only: wipe devices+sessions if **no items** (recover interrupted setup) |
+| `POST /api/devices/pair-init` | Bearer (existing device) | Start pair; returns 6-word code |
+| `GET /api/devices/pair-fetch-epk?code=` | None | New device fetches ephemeral pubkey |
+| `GET /api/devices/pair-fetch-npk?code=` | Bearer | Existing device polls for new device pubkey |
+| `POST /api/devices/pair-wrap` | Bearer | Existing device sends master key sealed to new pubkey |
+| `POST /api/devices/pair` | None | New device completes handshake; receives token + wrapped key |
+| `GET /api/devices` | Bearer | List active devices |
+| `PATCH /api/devices/:id` | Bearer | Rename |
+| `DELETE /api/devices/:id` | Bearer | Revoke (not self) |
+| `GET /api/me` | Bearer | Current device + server stats |
+
+Session tokens: random bearer, SHA-256 hash stored server-side, **30-day TTL**.
+
+Optional account password API exists (`POST /api/password/set`, `/verify`) but is **not wired into onboarding UI** today.
+
+### Pairing handshake (6-word code)
+
+```
+Existing device          Server (in-memory, 5 min TTL)     New device
+     |                              |                          |
+     |-- POST pair-init (epk) ----->| stores code → epk        |
+     |<-- 6-word code --------------|                          |
+     |                              |<-- GET pair-fetch-epk ---|
+     |                              |--- epk ----------------->|
+     |                              |                          | generates npk + attestation
+     |                              |<-- POST /pair ------------|
+     |-- GET pair-fetch-npk (poll) ->|                          |
+     |<-- npk -----------------------|                          |
+     |-- POST pair-wrap (sealed MK)->| buffers wrap             |
+     |                              |--- wrapped MK + token -->|
+```
+
+- **Code format:** 6 BIP39 English words, hyphen-separated (regex: `^[a-z]+(?:[- ][a-z]+){5}$`).
+- **Code derivation:** BLAKE2b from existing device's ephemeral pubkey (`codeFromEpk`).
+- **Attestation:** `crypto_auth(npk || epk, BLAKE2b(epk || code))`.
+- Server waits up to **60s** for wrap after attestation.
+- Pair state is **in-memory only** — lost on server restart (codes expire anyway).
+
+### Keys created during setup
+
+| Artifact | Where | Notes |
+|----------|-------|-------|
+| 12-word BIP39 phrase | User's paper / password manager | Create path only; never sent to server |
+| 32-byte master key | Client memory (+ optional PIN wrap) | `phraseToMasterKey()` — BIP39 seed → Argon2id (salt `SyncBins/v1/master-salt`) |
+| Curve25519 device keypair | Client; pubkey on server | `crypto_box_keypair()` |
+| Session bearer token | Client localStorage; hash on server | Issued at bootstrap or pair complete |
+| Inbox bin | Client UI store | `inbox` — created on Done step |
+
+### Single-tenant "claim server" rules
+
+When `TENANT_MODE=single` (default self-host):
+
+- All traffic maps to tenant `default` (`ensureDefaultTenant()` at boot).
+- `POST /api/devices/bootstrap` succeeds only when **`deviceCount === 0`**.
+- `POST /api/devices/bootstrap/restart` deletes all devices + sessions if **`itemCount === 0`** — use when first setup was interrupted (409 on retry).
+- If items exist, restart returns **403** — must restore via phrase + pair from live device.
+
+### Return visits: unlock vs re-onboard
+
+| State | What user sees |
+|-------|----------------|
+| Session + master key in memory | Main app |
+| Session persisted, master key cleared (tab closed) | **UnlockScreen** — PIN or recovery phrase |
+| No session | Full onboarding wizard |
+| "Connect existing" from dashboard | Clears session, opens onboarding on **pair** path |
+
+### Common errors (user-facing)
+
+| Situation | Message / behavior |
+|-----------|-------------------|
+| Server unreachable during bootstrap | "Cannot reach the SyncBins server…" |
+| Bootstrap 409 (devices already exist) | Create: interrupted setup → **Start setup again** or pair instead. Restore: auto-switch to pair-code. |
+| Bootstrap restart with items | "already has saved items — use Restore with recovery phrase" |
+| Wrong phrase on restore pair | "Recovery phrase does not match this SyncBins account." |
+| Invalid / unknown pair code | 404 `pair_invalid` |
+| Expired pair code (>5 min) | 410 `pair_expired` — generate a new one |
+| Wrap timeout (existing device offline) | Pair fails after ~60s |
+| PIN lockout (5 wrong attempts) | PIN blob wiped; must use recovery phrase |
+| Revoke device | Cannot revoke self; revoked device loses session |
+| Hosted inactive tenant | 402 `payment_required` |
+
+### Doc page mapping
+
+| User question | Write in | Cross-link |
+|---------------|----------|------------|
+| First visit wizard, three paths | `get-started/first-setup.mdx` | welcome, quick-unlock |
+| Add phone/laptop later | `get-started/pairing.mdx` | devices settings |
+| Lost device / lost phrase | `get-started/recovery.mdx` | bootstrap restart (self-host) |
+| Hosted subdomain signup | `get-started/first-setup.mdx` § Hosted signup | — |
+| Self-host claim warning | `self-hosting/quickstart.mdx`, `first-setup.mdx` | ALPHA.md |
+| Crypto details | `concepts/encryption.mdx`, `reference/encryption.md` | — |
+| Full API shapes | `reference/rest.mdx` or `reference/api.md` | `shared/src/api.ts` |
+
+### Key source files (App repo)
+
+| Area | Path |
+|------|------|
+| Wizard orchestration | `web/src/features/onboarding/OnboardingFlow.tsx` |
+| Step components | `web/src/components/onboarding/*.tsx` |
+| Hosted signup | `web/src/features/signup/SignupPage.tsx`, `server/src/routes/signup.ts` |
+| Client crypto | `web/src/crypto/phrase.ts`, `keys.ts`, `pairing.ts`, `pin.ts`, `fingerprint.ts` |
+| Bootstrap API client | `web/src/api/bootstrap.ts` |
+| Pair host (Settings) | `web/src/hooks/usePairHost.ts`, `web/src/components/settings/DevicesPane.tsx` |
+| Server auth routes | `server/src/routes/auth.ts` |
+| Pair handshake | `server/src/auth/pair.ts` |
+| Tenant resolution | `server/src/middleware/tenant.ts` |
+| Zod contracts | `shared/src/api.ts` |
+| E2E tests | `e2e/bootstrap.spec.ts`, `e2e/pair-sync.spec.ts`, `e2e/helpers/onboarding.ts` |
+| Alpha tester guide | `docker/deploy/ALPHA.md` |
+
+### Mermaid — high-level app entry
+
+```mermaid
+flowchart TD
+  A[App load] --> B{Persisted session?}
+  B -->|No| C[Onboarding 7 steps]
+  B -->|Yes| D{Master key in memory?}
+  D -->|Yes| E[Main app]
+  D -->|No| F[UnlockScreen]
+  F --> E
+  C --> G{Path A / B / C}
+  G -->|Create| H[12 words → bootstrap]
+  G -->|Pair| I[6 words → pair handshake]
+  G -->|Restore| J[12 words → bootstrap or pair]
+  H --> K[Optional PIN → Inbox]
+  I --> K
+  J --> K
+```
+
+---
+
 ## Cheat sheet — give this to an LLM designer
 
 > **You're redesigning the SyncBins documentation site.** SyncBins is a single-user, end-to-end encrypted, self-hostable personal sharing portal that syncs to all your devices in real time. The docs serve three audiences: new end-users, homelab self-hosters, and developers building integrations.
@@ -505,6 +740,6 @@ Decisions that need a human to make before the design lands:
 >
 > **Source of truth for the API/protocol reference pages is the App repo's `shared/src/*.ts` zod schemas** — don't invent fields.
 >
-> **The biggest content gaps** are: recovery scenarios walkthrough, quick-unlock PIN docs, multi-tenant mode setup, storage backend deep-dive, and error code reference.
+> **The biggest content gaps** are: recovery scenarios walkthrough, multi-tenant mode setup, storage backend deep-dive, and error code reference. **Onboarding / pairing knowledge** is in §12; `get-started/first-setup.mdx` is written from it.
 >
 > Read `Docs/KNOWLEDGE-BASE.md` (this file) before starting.

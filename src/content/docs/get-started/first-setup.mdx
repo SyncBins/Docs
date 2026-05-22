@@ -1,14 +1,229 @@
 ---
 title: First-time setup
-description: Walk through the onboarding wizard one screen at a time — name yourself, generate a recovery phrase, confirm it, pick your starter bins.
+description: Walk through the onboarding wizard — hosted signup, create a new SyncBin, pair a device, or restore with your recovery phrase.
 sidebar:
   order: 2
 ---
 
-import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, LinkCard, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
-Walk through the onboarding wizard one screen at a time — name yourself, generate a recovery phrase, confirm it, pick your starter bins.
+The first time you open SyncBins in a browser, you run a **7-step onboarding wizard**. It registers this browser as a **device**, sets up your encryption keys, and drops you into your **Inbox** bin.
 
-<Aside type="note" title="Coming soon">
-This page is part of the redesigned IA but the content hasn't landed yet. The KNOWLEDGE-BASE doc has a draft outline; drop a comment on [the docs issue](https://github.com/SyncBins/Docs/issues) if you want to help write it.
+This page walks through every screen. If you already use SyncBins on another device and just need a pairing code, skip to [Pairing more devices](/get-started/pairing/) or choose path **B** below.
+
+## Before you start
+
+<Aside type="note" title="Hosted vs self-hosted">
+**Hosted:** you sign up at syncbins.com, get a URL like `https://you.syncbins.com`, then run the wizard there.
+
+**Self-hosted:** you open your own domain (e.g. `https://box.example.com`) and run the same wizard. The **first person to finish claims the server** — complete setup immediately after exposing the URL. See [Self-hosting quick start](/self-hosting/quickstart/).
 </Aside>
+
+You will need:
+
+- A modern browser (Chrome, Safari, Firefox, Edge)
+- Pen and paper (or a password manager) for the **12-word recovery phrase** on a new vault
+- ~2 minutes uninterrupted
+
+There is **no account password** in the current onboarding flow — your vault is secured by the recovery phrase (and an optional local PIN).
+
+## Hosted signup (syncbins.com)
+
+If you are on the hosted product, signup happens **before** the wizard:
+
+<Steps>
+1. Choose your subdomain (e.g. `gavin` → `gavin.syncbins.com`).
+2. Enter your email and submit **Create my SyncBins →**.
+3. Open the URL you receive — the same 7-step wizard runs there.
+</Steps>
+
+Signup only creates your tenant. The recovery phrase, device keys, and encryption still happen inside onboarding on your subdomain.
+
+## The seven steps
+
+Every path shares the same step counter (`step N of 7` in the UI):
+
+| Step | Screen | All paths? |
+|------|--------|------------|
+| 1 | Welcome | Yes |
+| 2 | How are you joining? | Yes |
+| 3 | Recovery phrase | Create & restore only |
+| 4 | Name this device | Yes |
+| 5 | Device setup | Yes (bootstrap or pair code) |
+| 6 | Quick-unlock PIN | Yes (skippable) |
+| 7 | You're in. | Yes |
+
+### Step 1 — Welcome
+
+Headline: **A place to share things with yourself.**
+
+Tap **Let's go** to continue. Footer shortcuts:
+
+- **Pair with a six-word code** — jumps straight to the pair path (path B).
+- Restore link — jumps to restore path (path C).
+
+### Step 2 — How are you joining?
+
+Pick one of three cards:
+
+<Tabs>
+  <TabItem label="A · Create">
+    **Create a new SyncBin** — first time on this server. You get a fresh 12-word recovery phrase. Use this on a brand-new hosted subdomain or a self-hosted server nobody has claimed yet.
+  </TabItem>
+  <TabItem label="B · Pair">
+    **Pair this device** — you already use SyncBins on another phone or computer. You will enter a **six-word pairing code** from Settings → Devices on that device. No recovery phrase on this path.
+  </TabItem>
+  <TabItem label="C · Restore">
+    **Restore with recovery phrase** — you lost access to all devices but still have your twelve words. The server may ask you to pair from a live device if other devices are still registered.
+  </TabItem>
+</Tabs>
+
+### Step 3 — Recovery phrase (create & restore only)
+
+<Tabs>
+  <TabItem label="Create">
+    **Your twelve magic words.**
+
+    1. Tap **Tap to reveal** to show the phrase.
+    2. Write it down offline — copy and print backup are available.
+    3. Tap **I wrote them down** to continue.
+
+    The phrase is the **only** way to recover your vault if every device is lost. The server never sees it.
+  </TabItem>
+  <TabItem label="Restore">
+    **Enter your recovery phrase.**
+
+    Type all 12 words. The UI shows your vault fingerprint and probes the server (`deviceCount`, `itemCount`) so you can confirm you are on the right SyncBin.
+
+    If the server already has devices, you cannot bootstrap again — you will be sent to the pairing-code step instead.
+  </TabItem>
+</Tabs>
+
+<LinkCard
+  title="Recovery scenarios"
+  description="Lost a device, forgot your PIN, or starting fresh — what to do in each case."
+  href="/get-started/recovery/"
+/>
+
+### Step 4 — Name this device
+
+**Name this device** — give this browser a label (e.g. "Work laptop", "iPhone Safari"). Default is suggested from your browser/OS.
+
+You will see this name on **Settings → Devices** and when generating pair codes.
+
+### Step 5 — Device setup
+
+What happens here depends on your path:
+
+<Tabs>
+  <TabItem label="Create / empty restore">
+    **Setting up your device…** — automatic.
+
+    The browser derives your master key from the phrase, generates a Curve25519 keypair, and calls `POST /api/devices/bootstrap`. On success you are registered as the **first device** on this SyncBin.
+
+    <Aside type="caution" title="Self-hosters: claim the server">
+    On a fresh self-hosted install, **anyone** who reaches your URL before you finish could register first. Complete this step before sharing the URL.
+    </Aside>
+  </TabItem>
+  <TabItem label="Pair (path B or restore with existing devices)">
+    **Enter the pairing code.**
+
+    On your **existing** device: **Settings → Devices → Generate pair code**. You get **six words** (valid for **5 minutes**). Type them on the new device and tap **Pair this device**.
+
+    QR scanning is not available in alpha — type the words manually.
+
+    <LinkCard
+      title="Pairing more devices"
+      description="Full walkthrough from the existing device's side."
+      href="/get-started/pairing/"
+    />
+  </TabItem>
+</Tabs>
+
+#### If bootstrap fails with "already has devices"
+
+Your server is not empty. Common fixes:
+
+- **Interrupted first setup (self-host, no items yet):** use **Start setup again** if offered — calls `POST /api/devices/bootstrap/restart` (single-tenant only, wipes orphan device rows).
+- **Another device is already set up:** choose path **B** and pair with a six-word code instead.
+- **Restoring with phrase:** enter the pair code from a device that still works.
+
+### Step 6 — Quick-unlock PIN (optional)
+
+**Set a PIN for this browser** — 6+ digits that locally wrap your master key so you are not retyping 12 words every time the tab locks.
+
+- Tap **Set PIN** after entering and confirming digits, or **Skip for now**.
+- The recovery phrase always remains the source of truth.
+
+<LinkCard
+  title="Quick-unlock PIN"
+  description="What the PIN does, lockout rules, and threat model."
+  href="/get-started/quick-unlock/"
+/>
+
+### Step 7 — Done
+
+**You're in.** — your **Inbox** bin is ready. Tap **Open my bins** to reach the feed.
+
+Tips on this screen: paste something, pair another device, explore Settings.
+
+## What got created
+
+After onboarding, you have:
+
+| Thing | Where it lives |
+|-------|----------------|
+| **Device registration** | Server: id, name, public key. Client: session token in localStorage. |
+| **Device secret key** | IndexedDB, encrypted to your master key |
+| **Master key** | Browser memory (cleared when tab closes) |
+| **Recovery phrase** | Your offline backup only (create/restore paths) |
+| **Optional PIN wrap** | localStorage on this browser only |
+| **Inbox bin** | Local UI — default bin for new items |
+
+Each additional device you pair gets its **own** keypair. Items are encrypted so every paired device can decrypt them.
+
+## What the server never sees
+
+- Your 12-word recovery phrase
+- Your master key or PIN
+- Device secret keys
+- Item plaintext (only ciphertext blobs)
+
+## Return visits
+
+Closing the tab clears the master key from memory. Next visit:
+
+- **PIN set:** unlock with PIN (or fall back to phrase).
+- **No PIN:** unlock with recovery phrase.
+
+If you cleared site data or revoked this device, run onboarding again — usually path **B** (pair) or **C** (restore).
+
+## Troubleshooting
+
+| Problem | What to do |
+|---------|------------|
+| Cannot reach server | Check URL, DNS, and that Docker/compose is running (self-host). |
+| Pair code expired | Generate a new code — codes last 5 minutes. |
+| Recovery phrase does not match | Wrong phrase for this SyncBin, or typo — check vault fingerprint. |
+| Setup didn't finish | Go back to device setup; do not skip ahead to PIN/Done. |
+| PIN lockout (5 wrong tries) | PIN is wiped — unlock with recovery phrase. |
+
+More scenarios: [Recovery scenarios](/get-started/recovery/).
+
+## Next steps
+
+<LinkCard
+  title="Adding your first item"
+  description="Paste a link, drop a file, or type a note into Inbox."
+  href="/get-started/first-item/"
+/>
+<LinkCard
+  title="Pairing more devices"
+  description="Phone, second laptop, or another browser — six-word code from Settings."
+  href="/get-started/pairing/"
+/>
+<LinkCard
+  title="How encryption works"
+  description="Master key derivation, device keys, and what the server can see."
+  href="/concepts/encryption/"
+/>

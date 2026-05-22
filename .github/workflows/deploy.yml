@@ -31,6 +31,8 @@ jobs:
         run: npm ci
 
       - name: Build with Astro
+        env:
+          FACEBOOK_APP_ID: ${{ secrets.FACEBOOK_APP_ID }}
         run: npm run build
 
       - name: Upload Pages artifact

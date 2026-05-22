@@ -2,6 +2,27 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
+/** Meta / Facebook App ID — set FACEBOOK_APP_ID at build time (GitHub Actions secret). */
+const facebookAppId = process.env.FACEBOOK_APP_ID?.trim();
+
+const head = [
+  { tag: 'link', attrs: { rel: 'icon', type: 'image/png', sizes: '96x96', href: '/favicon-96x96.png' } },
+  { tag: 'link', attrs: { rel: 'icon', href: '/favicon.ico' } },
+  { tag: 'link', attrs: { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' } },
+  { tag: 'link', attrs: { rel: 'manifest', href: '/site.webmanifest' } },
+  { tag: 'meta', attrs: { name: 'theme-color', content: '#0c0b0e', media: '(prefers-color-scheme: dark)' } },
+  { tag: 'meta', attrs: { name: 'theme-color', content: '#faf8f5', media: '(prefers-color-scheme: light)' } },
+  { tag: 'meta', attrs: { property: 'og:image', content: 'https://docs.syncbins.com/og-docs.png' } },
+  { tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
+  { tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
+  { tag: 'meta', attrs: { property: 'og:image:alt', content: 'SyncBins Documentation — setup, pairing, self-hosting, and encryption guides' } },
+  { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
+  { tag: 'meta', attrs: { name: 'twitter:image', content: 'https://docs.syncbins.com/og-docs.png' } },
+  ...(facebookAppId
+    ? [{ tag: 'meta', attrs: { property: 'fb:app_id', content: facebookAppId } }]
+    : []),
+];
+
 // https://astro.build/config
 export default defineConfig({
   site: 'https://docs.syncbins.com',
@@ -10,20 +31,7 @@ export default defineConfig({
       title: 'SyncBins',
       description: 'SyncBins documentation — personal sharing portal, end-to-end encrypted, self-hostable.',
       favicon: '/favicon.svg',
-      head: [
-        { tag: 'link', attrs: { rel: 'icon', type: 'image/png', sizes: '96x96', href: '/favicon-96x96.png' } },
-        { tag: 'link', attrs: { rel: 'icon', href: '/favicon.ico' } },
-        { tag: 'link', attrs: { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' } },
-        { tag: 'link', attrs: { rel: 'manifest', href: '/site.webmanifest' } },
-        { tag: 'meta', attrs: { name: 'theme-color', content: '#0c0b0e', media: '(prefers-color-scheme: dark)' } },
-        { tag: 'meta', attrs: { name: 'theme-color', content: '#faf8f5', media: '(prefers-color-scheme: light)' } },
-        { tag: 'meta', attrs: { property: 'og:image', content: 'https://docs.syncbins.com/og-docs.png' } },
-        { tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
-        { tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
-        { tag: 'meta', attrs: { property: 'og:image:alt', content: 'SyncBins Documentation — setup, pairing, self-hosting, and encryption guides' } },
-        { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
-        { tag: 'meta', attrs: { name: 'twitter:image', content: 'https://docs.syncbins.com/og-docs.png' } },
-      ],
+      head,
       social: [
         { icon: 'rocket',     label: 'SyncBins',   href: 'https://syncbins.com' },
         { icon: 'x.com',      label: 'X',          href: 'https://x.com/SyncBins' },

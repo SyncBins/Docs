@@ -545,11 +545,6 @@ button[data-open-modal] kbd {
   text-shadow: 0 0 40px oklch(0.55 0.13 var(--sb-acc-h) / 0.45);
 }
 
-.sb-hero-accent {
-  color: var(--sb-acc);
-  text-shadow: 0 0 40px oklch(0.55 0.13 var(--sb-acc-h) / 0.45);
-}
-
 .sb-hero h1 .sb-hero-tm {
   font-size: 0.5em;
   font-weight: 700;
@@ -640,7 +635,6 @@ button[data-open-modal] kbd {
   opacity: 0.85;
 }
 .sb-meta-item b { color: var(--sb-ink-1); font-weight: 500; }
-.sb-meta-accent { color: var(--sb-acc) !important; }
 
 /* Section labels on the landing */
 .sb-section-h {

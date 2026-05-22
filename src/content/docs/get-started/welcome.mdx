@@ -1,0 +1,65 @@
+---
+title: Welcome to SyncBins
+description: You've signed up. Now what? This short tour gets you from a brand-new account to a phone + laptop syncing in under three minutes.
+sidebar:
+  order: 1
+---
+
+import { Aside, CardGrid, Card, LinkCard, Steps } from '@astrojs/starlight/components';
+
+You've signed up. Now what? This short tour gets you from a brand-new account to a phone + laptop syncing in under three minutes.
+
+## What SyncBins actually is
+
+Think of it as **Telegram Saved Messages with proper bins**. A single-user place to drop passwords, links, screenshots, code snippets, voice memos, files, contacts — anything you want to hand from one of your devices to another.
+
+It's not a team tool. It's not for sharing with other people. The only audience for your bins is *future-you* on your other device.
+
+<Aside type="note" title="The mental model">
+**Bins** are buckets you put things into. **Items** are the things. **Devices** are your phone, laptop, browser tab — anything you've paired. Items sync to every device.
+</Aside>
+
+## The three things you'll do today
+
+<Steps>
+1. [Finish first-time setup](/get-started/first-setup/) — name yourself, generate a recovery phrase, and pick your starter bins.
+2. [Add your first item](/get-started/first-item/) — paste a link, drag a screenshot, or type a note.
+3. [Pair another device](/get-started/pairing/) — scan a QR code or type six words.
+</Steps>
+
+## Hosted or self-hosted?
+
+Both modes look identical once you're in. The only difference is who runs the server:
+
+<CardGrid>
+  <Card title="Hosted · syncbins.com" icon="cloud-download">
+    We run the server. Free for 2 devices and 1 GB; Pro at $10/mo (founder pricing, locked) unlocks unlimited devices and 50 GB. Nothing to install on the server side — just sign up.
+  </Card>
+  <Card title="Self-hosted" icon="rocket">
+    MIT-licensed Go binary. One Docker compose on any $4 VPS. Every feature, no paywall, no license check. See the [Self-Hosting quick start](/self-hosting/quickstart/).
+  </Card>
+</CardGrid>
+
+## A word about your recovery phrase
+
+During first-time setup we'll show you a **12-word recovery phrase**. It is the only way to unlock your bins on a new device. The server never sees it. We can't reset it. If you lose it *and* every paired device, your bins are **gone forever**.
+
+<Aside type="caution" title="Take this seriously">
+Write the phrase on paper. Take a photo of it and store it in your password manager. Both, ideally. Treat it the way you'd treat the seed phrase for a hardware wallet.
+</Aside>
+
+## Ready?
+
+Hit Continue and we'll walk through the onboarding wizard one screen at a time.
+
+<LinkCard
+  title="First-time setup"
+  description="Name yourself, generate a recovery phrase, pick your starter bins."
+  href="/get-started/first-setup/"
+/>
+
+<LinkCard
+  title="How encryption works"
+  description="Skip ahead to the concepts — the threat model and what the server can see."
+  href="/concepts/encryption/"
+/>

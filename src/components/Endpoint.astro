@@ -1,0 +1,131 @@
+---
+/**
+ * Endpoint card for the REST API reference.
+ *
+ * Usage in MDX:
+ *   <Endpoint method="POST" path="/items" tag="auth: device" desc="Create an item.">
+ *     <Fragment slot="params">
+ *       - **`id`** `string` *(required)* — Client-generated ULID.
+ *       - **`bin_id`** `string` *(required)* — Target bin.
+ *     </Fragment>
+ *
+ *     ```json title="Request body"
+ *     { ... }
+ *     ```
+ *   </Endpoint>
+ *
+ * The params slot accepts plain Markdown (the bulleted list above renders
+ * as a definition grid via CSS). The default slot accepts whatever else —
+ * usually request/response code blocks.
+ */
+interface Props {
+  method: 'GET' | 'POST' | 'PUT' | 'DEL' | 'DELETE' | 'PATCH';
+  path: string;
+  tag?: string;
+  desc?: string;
+}
+
+const { method, path, tag, desc } = Astro.props;
+const verbClass = method.toLowerCase();
+const verbLabel = method === 'DELETE' ? 'DEL' : method;
+---
+
+<div class="sb-endpoint">
+  <div class="sb-endpoint__head">
+    <span class={`sb-endpoint__verb sb-endpoint__verb--${verbClass}`}>{verbLabel}</span>
+    <code class="sb-endpoint__path">{path}</code>
+    {tag ? <span class="sb-endpoint__tag">{tag}</span> : null}
+  </div>
+  {desc ? <p class="sb-endpoint__desc">{desc}</p> : null}
+  {Astro.slots.has('params') ? (
+    <div class="sb-endpoint__params">
+      <slot name="params" />
+    </div>
+  ) : null}
+  <slot />
+</div>
+
+<style is:global>
+  .sb-endpoint {
+    background: var(--sb-bg-2);
+    border: 1px solid var(--sb-line-1);
+    border-radius: var(--sb-r-l);
+    padding: 18px 20px;
+    margin: 18px 0;
+  }
+  .sb-endpoint__head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+  }
+  .sb-endpoint__verb {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+  }
+  .sb-endpoint__verb--get    { background: oklch(0.32 0.08 var(--sb-acc-h) / .35); color: var(--sb-acc); }
+  .sb-endpoint__verb--post   { background: oklch(0.32 0.08 150 / .35);             color: var(--sb-ok); }
+  .sb-endpoint__verb--put    { background: oklch(0.32 0.08 75 / .35);              color: var(--sb-warn); }
+  .sb-endpoint__verb--del,
+  .sb-endpoint__verb--delete { background: oklch(0.32 0.08 18 / .35);              color: var(--sb-bad); }
+  .sb-endpoint__verb--patch  { background: oklch(0.32 0.08 280 / .35);             color: #c4b5fd; }
+  .sb-endpoint__path {
+    font-family: 'Geist Mono', monospace;
+    font-size: 14px;
+    color: var(--sb-ink-0);
+    background: none !important;
+    padding: 0 !important;
+    border: 0 !important;
+  }
+  .sb-endpoint__tag {
+    margin-left: auto;
+    font-family: 'Geist Mono', monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--sb-ink-3);
+    padding: 2px 6px;
+    background: var(--sb-bg-3);
+    border: 1px solid var(--sb-line-2);
+    border-radius: 4px;
+  }
+  .sb-endpoint__desc {
+    font-size: 13.5px;
+    color: var(--sb-ink-2);
+    margin: 2px 0 12px;
+  }
+  .sb-endpoint__params {
+    border-top: 1px solid var(--sb-line-1);
+    margin-top: 4px;
+    padding-top: 8px;
+  }
+  .sb-endpoint__params ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .sb-endpoint__params li {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--sb-line-1);
+    font-size: 13px;
+    color: var(--sb-ink-1);
+  }
+  .sb-endpoint__params li:last-child { border-bottom: 0; }
+  .sb-endpoint__params li code {
+    background: none !important;
+    padding: 0 !important;
+    border: 0 !important;
+    color: var(--sb-acc) !important;
+    font-family: 'Geist Mono', monospace;
+    font-size: 12.5px;
+  }
+  .sb-endpoint__params li strong code {
+    color: var(--sb-ink-0) !important;
+    font-weight: 600;
+  }
+</style>

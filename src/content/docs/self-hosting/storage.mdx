@@ -1,0 +1,121 @@
+---
+title: Choosing storage
+description: Side-by-side comparison of the four supported storage backends — Azure Blob, S3, Cloudflare R2, and local disk. Cost, latency, durability, ease of setup.
+sidebar:
+  order: 2
+  badge:
+    text: New
+    variant: tip
+---
+
+import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+SyncBins supports four blob backends out of the box. Pick one based on what you already use (or want to use). All four are first-class — the choice doesn't unlock or lock features, only changes cost, latency, and ease-of-setup.
+
+## TL;DR recommendation
+
+- **Homelab / hobbyist:** **Cloudflare R2** — zero egress fees, S3-compatible, $0.015/GB-mo. Five-minute setup.
+- **Already on AWS/Azure:** match what you have. The bucket is the cheap part; the egress is what bites.
+- **Air-gapped or NAS:** **local disk** — point it at a SMB/NFS mount and let your existing backup story handle durability.
+- **Enterprise hosted:** **Azure Blob**, hot tier. Best multi-region story, predictable latency.
+
+## At-a-glance
+
+| Backend | Cost / GB-mo | Egress | Setup | Best for |
+|---------|--------------|--------|-------|----------|
+| **Azure Blob** | $0.018 (Hot, LRS) | $0.087/GB after 100 GB | 10 min | Enterprise, multi-region |
+| **AWS S3** | $0.023 (Standard) | $0.09/GB after 100 GB | 10 min | Already on AWS |
+| **Cloudflare R2** | $0.015 | **$0** | 5 min | Hobbyists, public hosting |
+| **Local disk** | $0 (your hardware) | $0 | 1 min | Homelab, air-gapped |
+
+Prices are list, May 2026. R2's free egress is the killer feature — once your account has any traffic, the per-GB-mo differences disappear.
+
+## Picking one
+
+<Tabs syncKey="storage-backend">
+  <TabItem label="Cloudflare R2">
+    ```ini title=".env"
+    STORAGE_BACKEND=s3
+    S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+    S3_REGION=auto
+    S3_BUCKET=syncbins
+    S3_ACCESS_KEY=...
+    S3_SECRET_KEY=...
+    S3_FORCE_PATH_STYLE=true
+    ```
+
+    R2 speaks S3, so SyncBins uses the S3 driver pointed at the R2 endpoint. Create the bucket in the R2 dashboard, generate an API token scoped to that bucket, paste both in. Latency to the eyeball is good worldwide thanks to Cloudflare's edge.
+  </TabItem>
+
+  <TabItem label="Azure Blob">
+    ```ini title=".env"
+    STORAGE_BACKEND=azure
+    AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...
+    AZURE_BLOB_CONTAINER=syncbins
+    ```
+
+    Use the **Hot** access tier. Cool and Archive will make item retrieval painfully slow for screenshots and audio. User-delegated SAS URLs (the default) are scoped to the container and expire in 15 min for upload, 5 min for read.
+  </TabItem>
+
+  <TabItem label="AWS S3">
+    ```ini title=".env"
+    STORAGE_BACKEND=s3
+    S3_REGION=eu-west-1
+    S3_BUCKET=syncbins
+    S3_ACCESS_KEY=AKIA...
+    S3_SECRET_KEY=...
+    # S3_ENDPOINT only needed for non-AWS S3-compatible services
+    ```
+
+    Create the bucket with **block public access** on (we never need public reads — every URL is pre-signed). Lifecycle rule: nothing. SyncBins manages its own deletion.
+  </TabItem>
+
+  <TabItem label="Local disk">
+    ```ini title=".env"
+    STORAGE_BACKEND=local
+    LOCAL_BLOB_PATH=/data/blobs
+    ```
+
+    Mount the volume into the container at `/data/blobs`. SyncBins writes `{item_id}.bin` directly. The data is encrypted — backing it up rsync-style is fine. No SAS URL juggling; the server streams blobs directly.
+
+    Make sure the volume is on the box's main durable storage, not a `tmpfs`. The metadata SQLite DB lives at `/data/syncbins.db` regardless of backend.
+  </TabItem>
+</Tabs>
+
+## How big a bucket?
+
+Items under 64 KB live inline in SQLite — they don't touch blob storage. Everything else does:
+
+- **Screenshots:** typically 50 KB – 500 KB ciphertext (PNG / JPEG inflated by base64 + auth tag overhead).
+- **Voice memos:** ~0.5 MB per minute (Opus 64kbps).
+- **Files:** whatever you drop in.
+
+A heavy user adds ~50 MB per week. 50 GB is roughly two years of heavy use, four years of normal use. The free tier caps you at 1 GB; Pro at 50 GB.
+
+<Aside type="caution" title="Cap your bucket on the storage side too">
+SyncBins enforces per-tenant caps at the API layer, but a misconfigured client (or a bug in our code) shouldn't be able to rack up a four-figure storage bill. Set a billing alert on Azure / S3, or use R2 (no egress means the worst case is bounded by bytes-at-rest).
+</Aside>
+
+## Switching backends later
+
+It's a copy operation. SyncBins doesn't store anything client-specific in the blob ref beyond the item ID. Stop the server, mirror the bucket (`aws s3 sync` / `rclone copy` / `cp -r`), update `STORAGE_BACKEND` + creds, restart. The metadata DB keeps the same blob refs; the new backend serves them.
+
+## Going deeper
+
+<CardGrid>
+  <LinkCard
+    title="Quick start with Docker"
+    description="Where these env vars plug in."
+    href="/self-hosting/quickstart/"
+  />
+  <LinkCard
+    title="Backups & restore"
+    description="Snapshot strategy per backend."
+    href="/self-hosting/backups/"
+  />
+  <LinkCard
+    title="Configuration reference"
+    description="Every env var, every flag."
+    href="/self-hosting/config/"
+  />
+</CardGrid>

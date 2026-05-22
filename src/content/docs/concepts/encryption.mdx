@@ -1,0 +1,260 @@
+---
+title: How encryption works
+description: The plain-English version of the threat model. Every byte the server sees is ciphertext; the master key is derived from a 12-word phrase and never leaves your device.
+sidebar:
+  order: 1
+---
+
+import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import Lens from '../../../components/Lens.astro';
+
+The plain-English version of the threat model. Every byte the server sees is ciphertext; the master key is derived from a 12-word phrase and never leaves your device. Here's the full envelope, the pairing handshake, and exactly what the server can and can't see.
+
+## Primitives
+
+SyncBins only uses well-vetted, NaCl-family primitives — there's no custom crypto. Every primitive in the table below ships in libsodium and is exposed through `libsodium-wrappers` on the web client.
+
+| Use | Primitive | Library call |
+|-----|-----------|--------------|
+| Symmetric encryption (items, blobs) | `XChaCha20-Poly1305` | `crypto_aead_xchacha20poly1305_ietf_*` |
+| Key wrapping (K_item → device) | `Curve25519 sealed box` | `crypto_box_seal` |
+| Master-key derivation | `Argon2id` (t=3, m=64MB) | `crypto_pwhash` |
+| Recovery phrase | `BIP39` 128-bit entropy | — |
+| Pairing handshake | `X25519 + HMAC-SHA-256` | `crypto_kx_*` + `crypto_auth` |
+
+## From 12 words to a master key
+
+During onboarding we generate 128 bits of entropy and encode it as a BIP39 12-word phrase. The phrase is the only thing you have to back up.
+
+```ts title="client/crypto/master.ts"
+// 12-word phrase → master key (client-side, never sent to server)
+const seed   = bip39ToSeed(phrase);                       // 64 bytes
+const salt   = sha256("syncbins.master.v1");              // fixed, app-wide
+const master = await argon2id(seed, salt, {
+  t: 3, m: 64 * 1024, p: 1, len: 32,                      // 64 MB, ~700ms on laptop
+});
+```
+
+The master key is used for **pairing** and **recovery only** — it does not directly encrypt items. Each device generates its own Curve25519 keypair on first run; the device's private key is itself sealed to the master key and stored locally.
+
+<Aside type="tip" title="The PIN shortcut">
+Re-deriving the master key from the phrase takes ~700ms — fine for setting up a new device, annoying every time the browser locks. Setting a PIN (6+ digits) wraps the master key locally with a separate Argon2id pass keyed on the PIN. Next unlock is an Argon2id round on a short string — sub-100ms. See [Quick-unlock PIN](/get-started/quick-unlock/).
+</Aside>
+
+## The item envelope
+
+When you send an item, four things happen on the client. The server never sees the plaintext or `K_item` — only the ciphertext and the wrapped-key bundle.
+
+<div class="sb-diag">
+  <div class="sb-diag__t">Item encryption · client side</div>
+  <svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg" width="100%" height="auto">
+    <defs>
+      <linearGradient id="ed-plain" x1="0" x2="1">
+        <stop offset="0" stop-color="oklch(0.3 0.07 215)"/>
+        <stop offset="1" stop-color="oklch(0.22 0.06 215)"/>
+      </linearGradient>
+      <linearGradient id="ed-cipher" x1="0" x2="1">
+        <stop offset="0" stop-color="oklch(0.3 0.07 150)"/>
+        <stop offset="1" stop-color="oklch(0.22 0.06 150)"/>
+      </linearGradient>
+      <marker id="ed-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+      </marker>
+    </defs>
+    <g font-family="Geist Mono, monospace" font-size="10" fill="#706c79" letter-spacing="1">
+      <text x="70"  y="22">STEP 1 — GENERATE</text>
+      <text x="245" y="22">STEP 2 — ENCRYPT</text>
+      <text x="420" y="22">STEP 3 — WRAP K_ITEM</text>
+      <text x="600" y="22">STEP 4 — SEND</text>
+    </g>
+    <g transform="translate(40,40)">
+      <rect width="140" height="80" rx="10" fill="#17161b" stroke="#322f3b"/>
+      <text x="70" y="28" text-anchor="middle" font-family="Geist, sans-serif" font-size="12" fill="#dcd9e1" font-weight="500">randomBytes(32)</text>
+      <text x="70" y="48" text-anchor="middle" font-family="Geist Mono, monospace" font-size="10" fill="#7dd3fc">K_item</text>
+      <text x="70" y="66" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9" fill="#706c79">XChaCha20 key</text>
+    </g>
+    <g style="color:#322f3b">
+      <line x1="186" y1="80" x2="216" y2="80" stroke="currentColor" stroke-width="1.5" marker-end="url(#ed-arr)"/>
+    </g>
+    <g transform="translate(220,40)">
+      <rect width="140" height="80" rx="10" fill="url(#ed-plain)" stroke="oklch(0.45 0.1 215 / .4)"/>
+      <text x="70" y="22" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9" fill="#7dd3fc" letter-spacing="1">PLAINTEXT</text>
+      <text x="70" y="44" text-anchor="middle" font-family="Geist, sans-serif" font-size="11" fill="#f5f3f7">{`{ url: "…", title: "…" }`}</text>
+      <text x="70" y="64" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9" fill="#a09ca8">AAD = bin_id ∥ type ∥ ts</text>
+    </g>
+    <g style="color:#322f3b">
+      <line x1="365" y1="80" x2="395" y2="80" stroke="currentColor" stroke-width="1.5" marker-end="url(#ed-arr)"/>
+    </g>
+    <g transform="translate(400,40)">
+      <rect width="160" height="80" rx="10" fill="#17161b" stroke="#322f3b"/>
+      <text x="80" y="22" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9" fill="#fbbf24" letter-spacing="1">WRAP K_ITEM</text>
+      <text x="80" y="44" text-anchor="middle" font-family="Geist, sans-serif" font-size="11" fill="#f5f3f7">crypto_box_seal()</text>
+      <text x="80" y="62" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9" fill="#a09ca8">for each device pubkey</text>
+    </g>
+    <g style="color:#322f3b">
+      <line x1="565" y1="80" x2="595" y2="80" stroke="currentColor" stroke-width="1.5" marker-end="url(#ed-arr)"/>
+    </g>
+    <g transform="translate(600,40)">
+      <rect width="100" height="80" rx="10" fill="url(#ed-cipher)" stroke="oklch(0.4 0.08 150 / .4)"/>
+      <text x="50" y="22" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9" fill="#5dd5a8" letter-spacing="1">CIPHERTEXT</text>
+      <text x="50" y="44" text-anchor="middle" font-family="Geist, sans-serif" font-size="11" fill="#f5f3f7">+ wrapped[]</text>
+      <text x="50" y="64" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9" fill="#a09ca8">→ POST /items</text>
+    </g>
+    <g transform="translate(40,180)">
+      <rect width="660" height="80" rx="10" fill="#0c0b0e" stroke="#25232d" stroke-dasharray="4 4"/>
+      <text x="20" y="22" font-family="Geist Mono, monospace" font-size="10" fill="#706c79" letter-spacing="1">SERVER (cannot decrypt)</text>
+      <text x="20" y="46" font-family="Geist, sans-serif" font-size="12" fill="#dcd9e1">Stores ciphertext + wrapped key bundle. Records version. Fans out via WebSocket to other paired devices.</text>
+      <text x="20" y="66" font-family="Geist Mono, monospace" font-size="10" fill="#a09ca8">It sees: item id · bin_id · type · ts · size · sender device_id</text>
+    </g>
+    <g style="color:#322f3b">
+      <path d="M 650 120 L 650 175" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#ed-arr)"/>
+    </g>
+  </svg>
+</div>
+
+```ts title="client/crypto/envelope.ts"
+// Per-item encryption (TypeScript-ish pseudocode)
+const K_item   = randomBytes(32);
+const nonce    = randomBytes(24);
+const aad      = utf8(`${bin_id}|${type}|${ts}`);
+const ct       = xchacha20poly1305.encrypt(K_item, nonce, plaintext, aad);
+const wrapped  = devices.map(d => sodium.crypto_box_seal(K_item, d.pubkey));
+postItem({ id, bin_id, type, ts, nonce, ct, wrapped });
+```
+
+### Big items: blobs
+
+Items larger than 64 KB (screenshots, audio, files) take a different path: the body is encrypted locally just like above, then the ciphertext is uploaded directly to your storage backend via a short-lived SAS URL. Only the metadata + a `blob_ref` go through the JSON API.
+
+## What the server can actually see
+
+This is the part worth dwelling on. Three columns: what's fully readable to the server, what's structural metadata, and what's fully opaque.
+
+<Lens>
+  <Fragment slot="ok">
+    - Item ID (ULID)
+    - Bin ID
+    - Type (`password`, `link`, …)
+    - Timestamp
+    - Sender device ID
+    - Ciphertext size
+  </Fragment>
+  <Fragment slot="mid">
+    - Bin emoji + hue + capacity
+    - Device name + glyph
+    - Sync version counter
+    - Pubkey of each device
+    - Storage backend URL
+  </Fragment>
+  <Fragment slot="no">
+    - Item payload (any field)
+    - Bin name
+    - Master key / recovery phrase
+    - Device private keys
+    - Item search index
+    - Your PIN
+  </Fragment>
+</Lens>
+
+<Aside type="caution" title="Metadata is not nothing">
+The type label and bin tag are intentionally leaked so the server can render fanout decisions efficiently. If you're storing something where even the *shape* matters (e.g. "lots of passwords appearing at 3 AM"), that signal is observable to anyone with database access. Use a self-hosted box to remove that risk.
+</Aside>
+
+## Pairing a new device
+
+The 6-word pair code you see in the UI is a hash of an ephemeral public key. The full handshake is:
+
+<div class="sb-diag">
+  <div class="sb-diag__t">Pair handshake · 6 messages</div>
+  <svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg" width="100%" height="auto">
+    <defs>
+      <marker id="pd-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+      </marker>
+    </defs>
+    <g font-family="Geist Mono, monospace" font-size="10" letter-spacing="1">
+      <text x="20"  y="22" fill="#7dd3fc">EXISTING DEVICE</text>
+      <text x="305" y="22" fill="#706c79">SERVER</text>
+      <text x="570" y="22" fill="#5dd5a8">NEW DEVICE</text>
+    </g>
+    <line x1="90"  y1="40" x2="90"  y2="270" stroke="#25232d" stroke-width="1"/>
+    <line x1="360" y1="40" x2="360" y2="270" stroke="#25232d" stroke-width="1"/>
+    <line x1="630" y1="40" x2="630" y2="270" stroke="#25232d" stroke-width="1"/>
+    <circle cx="90" cy="40" r="6" fill="#7dd3fc"/>
+    <circle cx="360" cy="40" r="6" fill="#706c79"/>
+    <circle cx="630" cy="40" r="6" fill="#5dd5a8"/>
+    <g font-family="Geist, sans-serif" font-size="11" fill="#dcd9e1">
+      <line x1="90" y1="70" x2="358" y2="70" stroke="#7dd3fc" stroke-width="1.5" marker-end="url(#pd-arr)" style="color:#7dd3fc"/>
+      <text x="224" y="62" text-anchor="middle">1. POST /pair-init &nbsp;{`{ epk, expires: 5min }`}</text>
+      <text x="224" y="82" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9" fill="#a09ca8">6-word code = BIP39(SHA-256(epk)[:32])</text>
+      <line x1="630" y1="112" x2="362" y2="112" stroke="#5dd5a8" stroke-width="1.5" marker-end="url(#pd-arr)" style="color:#5dd5a8"/>
+      <text x="490" y="104" text-anchor="middle">2. GET /pair-fetch-epk?code=…</text>
+      <text x="490" y="124" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9" fill="#a09ca8">user types 6 words on new device</text>
+      <line x1="630" y1="152" x2="362" y2="152" stroke="#5dd5a8" stroke-width="1.5" marker-end="url(#pd-arr)" style="color:#5dd5a8"/>
+      <text x="490" y="144" text-anchor="middle">3. POST /pair-fetch-npk &nbsp;{`{ npk, attestation }`}</text>
+      <line x1="358" y1="194" x2="92" y2="194" stroke="#706c79" stroke-width="1.5" marker-end="url(#pd-arr)" style="color:#706c79"/>
+      <text x="224" y="186" text-anchor="middle">4. WS push: new device joining</text>
+      <line x1="90" y1="234" x2="358" y2="234" stroke="#7dd3fc" stroke-width="1.5" marker-end="url(#pd-arr)" style="color:#7dd3fc"/>
+      <text x="224" y="226" text-anchor="middle">5. POST /pair-wrap &nbsp;{`{ master_key_to_npk }`}</text>
+      <line x1="358" y1="262" x2="630" y2="262" stroke="#706c79" stroke-width="1.5" marker-end="url(#pd-arr)" style="color:#706c79"/>
+      <text x="490" y="254" text-anchor="middle">6. delivered to new device → paired ✓</text>
+    </g>
+  </svg>
+</div>
+
+The attestation in step 3 proves the new device knows the shared secret (i.e. read the 6 words from the existing device — not just intercepted them). The master key is only wrapped after the existing device verifies it.
+
+## Threat model summary
+
+| Adversary | Can read items? | Notes |
+|-----------|-----------------|-------|
+| Network observer (TLS-on-the-wire) | No | HTTPS + items already encrypted at the app layer. |
+| Compromised SyncBins host | No | Sees ciphertext + metadata only. Cannot fabricate items signed by another device. |
+| Stolen unlocked device | Yes | Set a PIN; revoke the device remotely from another paired device. |
+| Recovery phrase + stolen device | Yes | Full access. Keep the phrase offline; rotate after exposure. |
+| Malicious paired device | Yes | It's paired — it has the master key. Revoke + rotate to evict. |
+| Quantum adversary, future | No (for now) | Curve25519 is breakable post-Q. Re-encrypt rolling out with PQ KEM in 2027. |
+
+## Key rotation & revocation
+
+Revoking a device is a metadata flag. The device's pubkey is marked revoked; new items skip it in the wrapped-key bundle; the server refuses its bearer token. Existing items the revoked device downloaded before revocation are obviously still on that device — revocation prevents future access, not past.
+
+For full rotation (e.g. you think the phrase leaked), generate a new phrase from the Encryption settings pane. Every item is re-wrapped to fresh device keys; old wrapped-key bundles are dropped. This is a background job — expect a few minutes on a large bin.
+
+## Going deeper
+
+<CardGrid>
+  <LinkCard
+    title="Reference → Encryption envelope"
+    description="Exact byte layout of the on-wire format."
+    href="/reference/envelope/"
+  />
+  <LinkCard
+    title="Concepts → The device model"
+    description="Pairing, revocation, recovery in plainer prose."
+    href="/concepts/devices/"
+  />
+  <LinkCard
+    title="Get Started → Recovery scenarios"
+    description="What to do when something goes wrong."
+    href="/get-started/recovery/"
+  />
+</CardGrid>
+
+<style>
+  .sb-diag {
+    background: var(--sb-bg-2);
+    border: 1px solid var(--sb-line-1);
+    border-radius: var(--sb-r-l);
+    padding: 24px;
+    margin: 20px 0;
+  }
+  .sb-diag__t {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--sb-ink-3);
+    margin-bottom: 14px;
+  }
+</style>

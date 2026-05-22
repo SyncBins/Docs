@@ -1,0 +1,96 @@
+---
+/**
+ * "What the server can see" 3-column lens — used on Concepts → Encryption.
+ *
+ * Usage:
+ *   <Lens>
+ *     <Fragment slot="ok">
+ *       - Item ID
+ *       - Bin ID
+ *     </Fragment>
+ *     <Fragment slot="mid">
+ *       - Bin emoji + hue
+ *     </Fragment>
+ *     <Fragment slot="no">
+ *       - Item payload
+ *     </Fragment>
+ *   </Lens>
+ */
+interface Props {
+  okLabel?: string;
+  midLabel?: string;
+  noLabel?: string;
+}
+const {
+  okLabel = 'Fully visible',
+  midLabel = 'Structural',
+  noLabel = 'Never visible',
+} = Astro.props;
+---
+
+<div class="sb-lens">
+  <div class="sb-lens__col sb-lens__col--ok">
+    <div class="sb-lens__h">{okLabel}</div>
+    <slot name="ok" />
+  </div>
+  <div class="sb-lens__col sb-lens__col--mid">
+    <div class="sb-lens__h">{midLabel}</div>
+    <slot name="mid" />
+  </div>
+  <div class="sb-lens__col sb-lens__col--no">
+    <div class="sb-lens__h">{noLabel}</div>
+    <slot name="no" />
+  </div>
+</div>
+
+<style is:global>
+  .sb-lens {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--sb-line-1);
+    border: 1px solid var(--sb-line-1);
+    border-radius: var(--sb-r-m);
+    overflow: hidden;
+    margin: 18px 0;
+  }
+  .sb-lens__col {
+    background: var(--sb-bg-2);
+    padding: 16px 18px;
+  }
+  .sb-lens__h {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--sb-ink-3);
+    margin-bottom: 10px;
+  }
+  .sb-lens__col ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .sb-lens__col li {
+    font-size: 13px;
+    color: var(--sb-ink-1);
+    padding: 4px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sb-lens__col li::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--sb-ink-4);
+    flex-shrink: 0;
+  }
+  .sb-lens__col--ok  li::before { background: var(--sb-ok); }
+  .sb-lens__col--mid li::before { background: var(--sb-warn); }
+  .sb-lens__col--no  li::before { background: var(--sb-bad); }
+  @media (max-width: 720px) {
+    .sb-lens { grid-template-columns: 1fr; }
+  }
+</style>

@@ -1,0 +1,183 @@
+---
+title: Error codes
+description: Every stable error.code returned by the SyncBins API — what causes it, how to recover. Searchable index of the API's failure modes.
+sidebar:
+  order: 5
+  badge:
+    text: New
+    variant: tip
+---
+
+import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+Every error response carries a stable `error.code` string. Match on the code (not the HTTP status, not the message) when writing client logic. The catalogue below is the full set; new codes are additive across server versions.
+
+```json title="Error envelope shape"
+{
+  "error": {
+    "code": "item_too_large",
+    "message": "Inline payload limit is 64 KB. Use POST /blobs/upload-url for larger items.",
+    "hint": "See /reference/errors#item_too_large"
+  }
+}
+```
+
+## 400 — Bad request
+
+### `invalid_payload`
+
+The request body failed zod validation. The `message` field includes the field path and rule that failed (e.g. `items.0.ts: expected integer, got string`).
+
+**Fix:** Re-check your payload against the [REST API reference](/reference/rest/). Most often this is a missing field, a base64 string with whitespace, or a timestamp in seconds instead of milliseconds.
+
+### `item_too_large`
+
+Inline payload exceeded 64 KB ciphertext.
+
+**Fix:** Use the two-step blob flow. `POST /blobs/upload-url` → upload to the returned URL → `PUT /items` with `blob_ref` set and `ct` empty.
+
+### `unknown_type`
+
+The `type` field isn't one of the 10 documented [content types](/reference/types/).
+
+**Fix:** Spelling — check `types.ts` in `shared/src/`. The server validates this strictly so a client typo doesn't silently corrupt the bin.
+
+## 401 — Unauthenticated
+
+### `missing_token`
+
+No `Authorization` header on a route that requires one.
+
+**Fix:** Add `Authorization: Bearer <session_token>`. Sessions are vended at pair time.
+
+### `expired_token`
+
+The bearer token is past its TTL (default 30 days).
+
+**Fix:** Re-authenticate. On the web client, this triggers the lock screen automatically.
+
+### `invalid_token`
+
+Token signature doesn't verify or the device ID encoded in it doesn't exist.
+
+**Fix:** Wipe the cached token and re-authenticate. If it persists, the JWT signing secret on the server has changed (often during a restart with a fresh `data/` dir).
+
+## 403 — Forbidden
+
+### `device_revoked`
+
+The token's device has been revoked. Items still on the device are unaffected; further API calls fail.
+
+**Fix:** Pair as a new device. Old wrapped keys for the revoked device are purged from new items.
+
+### `tenant_suspended`
+
+(Multi-tenant hosted only.) Tenant is past-due on Stripe. Reads continue; writes fail.
+
+**Fix:** Update payment method via `GET /api/billing/portal`. Suspension clears within ~30s of a successful Stripe webhook.
+
+### `bootstrap_locked`
+
+(Bootstrap endpoint only.) Server already has a device — bootstrap is one-shot.
+
+**Fix:** Pair through the regular handshake. If you actually need to reset, run `syncbins reset-bootstrap` on the server (destructive).
+
+## 404 — Not found
+
+### `item_not_found`
+
+The item ID doesn't exist, or was hard-deleted past the 30-day soft-delete window.
+
+**Fix:** Refresh your local view by calling `GET /items?since=<your-last-version>`.
+
+### `bin_not_found`
+
+`bin_id` doesn't exist or was deleted.
+
+**Fix:** Re-fetch the bin list. The UI usually handles this by removing the bin from the sidebar.
+
+### `tenant_not_found`
+
+(Multi-tenant.) Subdomain has no matching tenant row. Caddy's `ask` endpoint returns this so a cert isn't minted.
+
+**Fix:** Typo, or the tenant was purged.
+
+## 409 — Conflict
+
+### `bootstrap_already_done`
+
+Same as `bootstrap_locked` but returned from the signup flow when the slug is already claimed.
+
+**Fix:** Pick a different slug.
+
+### `device_exists`
+
+Trying to pair a device with a `device_id` that's already registered (rare — usually means the client didn't clear local state after a previous failed pair).
+
+**Fix:** Clear browser storage / `~/.config/syncbins/`, retry.
+
+### `version_conflict`
+
+A `PUT /items` retried with the same `id` and a different payload.
+
+**Fix:** Generate a new ULID for the second write. PUT is idempotent on `id` for retries, not for content changes.
+
+## 413 — Too large
+
+### `blob_too_large`
+
+Blob upload exceeded the server's max (default 1 GB).
+
+**Fix:** Bump `MAX_BLOB_SIZE_MB` in the server config, or break the file up client-side.
+
+### `account_quota_exceeded`
+
+Adding this item would push the tenant over its plan storage cap.
+
+**Fix:** Delete something, or upgrade the plan.
+
+## 429 — Rate limited
+
+### `rate_limited`
+
+The client is making too many requests. Default limits:
+
+- 100 req/s per device on read endpoints
+- 10 writes/s per device on `/items`
+- 5 pair attempts/min per IP on `/devices/pair-fetch-epk` (anti-bruteforce)
+
+**Fix:** Honour the `Retry-After` header (seconds). Back off exponentially if you keep hitting it.
+
+## 500 — Server
+
+### `internal`
+
+Something blew up server-side. The `message` is intentionally vague (full trace in logs).
+
+**Fix:** Retry once with exponential backoff. If it persists, open an issue at [SyncBins/App](https://github.com/SyncBins/App/issues) with the request ID from the `X-Request-Id` response header — that's how we'll find it in the logs.
+
+### `storage_unavailable`
+
+Blob backend (Azure / S3 / R2) returned an error. Server treats this as 500 because it's not your problem.
+
+**Fix:** Wait and retry. Check the backend's status page. If self-hosted, check your bucket credentials haven't expired.
+
+## Going deeper
+
+<CardGrid>
+  <LinkCard
+    title="REST API"
+    description="The endpoints these errors come from."
+    href="/reference/rest/"
+  />
+  <LinkCard
+    title="WebSocket protocol"
+    description="WS uses the same error.code values inside `error` frames."
+    href="/reference/ws/"
+  />
+  <LinkCard
+    title="Troubleshooting"
+    description="Operational issues that don't surface as API errors."
+    href="/self-hosting/troubleshooting/"
+  />
+</CardGrid>

@@ -1,0 +1,77 @@
+---
+title: Quick-unlock PIN
+description: A 6+ digit PIN that locally wraps your master key so you don't have to retype the 12-word recovery phrase every time the browser locks.
+sidebar:
+  order: 5
+  badge:
+    text: New
+    variant: tip
+---
+
+import { Aside, Steps, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+The recovery phrase is 12 words for a reason — strong entropy, no shortcuts. But re-deriving the master key from it takes ~700ms (Argon2id with 64MB memory). Fine when setting up a new device; tedious every single time the browser idle-locks.
+
+The PIN is the shortcut.
+
+## What it does
+
+When you set a PIN, the device:
+
+<Steps>
+1. Wraps your already-unlocked master key with a fresh Argon2id pass keyed on the PIN.
+2. Stores the wrapped blob in IndexedDB (or its equivalent on the platform).
+3. On next unlock, prompts for the PIN instead of the 12 words.
+</Steps>
+
+Re-deriving from a 6-digit PIN is ~80ms vs ~700ms from the phrase. Difference between "unlock is instant" and "unlock is noticeable."
+
+<Aside type="note" title="The phrase still works">
+The PIN doesn't replace your recovery phrase — it sits alongside it. You can always fall back to "Unlock with recovery phrase" on the lock screen, and you must do so on every new device.
+</Aside>
+
+## Setting one up
+
+Settings → Encryption → **Set quick-unlock PIN**. Pick 6 or more digits. We enforce:
+
+- Minimum 6 digits, no maximum
+- No straight runs (`123456`, `654321`)
+- No more than 3 repeating digits in a row (`111456` is OK; `111156` is not)
+- Not your last 5 PINs
+
+After confirming, the lock screen will offer PIN entry by default. The phrase option is always one tap away under "Other unlock methods."
+
+## What it isn't
+
+<Aside type="caution" title="A PIN is convenience, not a second factor">
+The PIN doesn't add cryptographic strength. An attacker with a copy of your device's IndexedDB blob can brute-force a 6-digit PIN trivially. The PIN protects against **shoulder-surfing** and **casual access**, not against a determined attacker with disk access.
+
+If your threat model includes someone getting your device while it's idle-locked, set a strong device-level passcode (iOS/Android lockscreen, FileVault, BitLocker) — that's where the real protection lives.
+</Aside>
+
+## Failure modes
+
+- **Wrong PIN, 5 times in a row:** lock the device out for 30 seconds (doubles each attempt). Falls back to phrase after 10 attempts.
+- **Forgotten PIN:** unlock with the recovery phrase, then set a new PIN. The old wrapped blob is deleted; no recovery flow needed.
+- **PIN exposed:** Settings → Encryption → Reset PIN. Old wrapped blob is purged, recovery phrase required for one unlock to re-establish.
+
+## Per-device, not per-account
+
+PINs are local to the device. Setting one on your laptop doesn't set one on your phone. This is intentional — losing your phone shouldn't compromise your laptop's quick unlock.
+
+If you want the same PIN on every device, set it on every device. We don't sync PINs.
+
+## Going deeper
+
+<CardGrid>
+  <LinkCard
+    title="How encryption works"
+    description="Where the PIN sits in the bigger picture (key derivation, wrapping)."
+    href="/concepts/encryption/#from-12-words-to-a-master-key"
+  />
+  <LinkCard
+    title="Recovery scenarios"
+    description="What to do if you forget the PIN, lose the device, or lose both."
+    href="/get-started/recovery/"
+  />
+</CardGrid>

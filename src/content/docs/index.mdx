@@ -1,46 +1,146 @@
 ---
-title: SyncBins
-description: A personal sharing portal — end-to-end encrypted, self-hostable, real-time across all your devices.
+title: SyncBins Documentation
+description: SyncBins — a single-user, end-to-end encrypted personal sharing portal. Self-host or use syncbins.com. Docs cover everything from your first item to the WebSocket protocol.
 template: splash
 hero:
-  tagline: Drop anything from one device, pick it up on another. Passwords, links, screenshots, files, voice memos — all end-to-end encrypted and always in sync.
+  tagline: |
+    A single-user, end-to-end encrypted personal sharing portal. Self-host on a $4 VPS, or use the hosted plan. These docs cover everything from your first item to the WebSocket protocol.
+  image:
+    alt: SyncBins — bins syncing across phone, laptop, tablet, watch
+    dark: /syncbins-hero.png
+    light: /syncbins-hero.png
   actions:
-    - text: Get Started
-      link: /guides/getting-started/
+    - text: Get started
+      link: /get-started/welcome/
       icon: right-arrow
-    - text: Self-Host
-      link: /guides/self-hosting/
+      variant: primary
+    - text: Self-host in 5 min
+      link: /self-hosting/quickstart/
       icon: external
+      variant: secondary
+    - text: GitHub
+      link: https://github.com/SyncBins
+      icon: github
       variant: minimal
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
+import PersonaCard from '../../components/PersonaCard.astro';
 
-## Why SyncBins?
+<div class="sb-meta-row">
+  <span>app version <b>0.9.3</b></span>
+  <span>·</span>
+  <span>docs updated <b>May 21, 2026</b></span>
+  <span>·</span>
+  <span>server license <b>MIT</b></span>
+  <span>·</span>
+  <span>built with <b>Astro Starlight</b></span>
+</div>
 
-<CardGrid stagger>
-	<Card title="End-to-end encrypted" icon="seti:lock">
-		Your master key is derived from a 12-word recovery phrase and never leaves your device. The server stores only ciphertext.
-	</Card>
-	<Card title="Self-hostable" icon="laptop">
-		One Docker container, BYO storage (Azure Blob, S3, R2, or local disk). Run it for free on any VPS.
-	</Card>
-	<Card title="Real-time sync" icon="random">
-		Items fan out to all your paired devices the moment they're written, via WebSocket push.
-	</Card>
-	<Card title="10 content types" icon="document">
-		Passwords, links, notes, code snippets, images, video, files, audio, contacts, and locations — each with a tailored UI.
-	</Card>
-	<Card title="MCP server" icon="seti:config">
-		Let AI agents (Cursor, Claude Desktop) read and write items on your behalf — as a paired device, with full E2E encryption.
-	</Card>
-	<Card title="For you alone" icon="approve-check">
-		No teams, no sharing, no public profiles. Future-you is the only audience.
-	</Card>
+<h2 class="sb-section-h">Pick your path</h2>
+
+<div class="sb-persona-grid">
+  <PersonaCard
+    eyebrow="A · For users"
+    title="I just want to use it"
+    description="Signed up at syncbins.com? Start here. Pair your devices, learn the bins model, set up a PIN for quick unlock, and know what to do if you ever lose a device."
+    href="/get-started/welcome/"
+  />
+  <PersonaCard
+    eyebrow="B · For self-hosters"
+    title="I'm running my own server"
+    description="One Docker compose on any VPS. BYO storage — Azure Blob, S3, R2, or local disk. TLS auto-provisioned. Backups, upgrades, and multi-tenant mode all covered."
+    href="/self-hosting/quickstart/"
+  />
+  <PersonaCard
+    eyebrow="C · For developers"
+    title="I'm building on it"
+    description="Complete REST and WebSocket reference. Encryption envelope spec. MCP server for agents. Every payload typed from the same zod schemas the server runs."
+    href="/reference/rest/"
+  />
+</div>
+
+<h2 class="sb-section-h">What's in the box</h2>
+
+<CardGrid>
+  <Card title="End-to-end encrypted" icon="seti:lock">
+    XChaCha20-Poly1305 + Curve25519. Server stores ciphertext only — never the master key.
+  </Card>
+  <Card title="Self-hostable" icon="rocket">
+    Single Go binary or one Docker compose. BYO Azure Blob, S3, R2, or local disk.
+  </Card>
+  <Card title="Real-time sync" icon="bars">
+    WebSocket fanout to every paired device. Drops are visible across devices in <1s.
+  </Card>
+  <Card title="10 content types" icon="open-book">
+    Passwords, links, code, voice memos, screenshots — each with a custom renderer.
+  </Card>
+  <Card title="Agent-ready" icon="seti:default">
+    `@syncbins/mcp` exposes the same store to Cursor, Claude Desktop, and any MCP client.
+  </Card>
+  <Card title="Single user, by design" icon="seti:plan">
+    No teams, no sharing, no permission models. Future-you is the only audience.
+  </Card>
 </CardGrid>
 
-## Quick look
+<h2 class="sb-section-h">Popular pages</h2>
 
-SyncBins organises your content into **bins** — named, emoji-tagged collections with a configurable capacity. Every item you add is encrypted on-device before it leaves, pushed to the server, and fanned out to your other devices in real time.
+<div class="sb-persona-grid">
+  <PersonaCard
+    eyebrow="Concepts"
+    title="How encryption works"
+    description="The threat model, the envelope, and what the server can actually see."
+    href="/concepts/encryption/"
+  />
+  <PersonaCard
+    eyebrow="Self-host"
+    title="Quick start with Docker"
+    description="Up and running in five minutes with one compose file and a CNAME."
+    href="/self-hosting/quickstart/"
+  />
+  <PersonaCard
+    eyebrow="Integrations"
+    title="MCP server for agents"
+    description="Cursor, Claude Desktop, anything that speaks MCP — pair it like a device."
+    href="/integrations/mcp/"
+  />
+</div>
 
-The hosted service lives at **[syncbins.com](https://syncbins.com)**. The server is open source — run it yourself on any machine that can run Docker.
+<style>
+  .sb-meta-row {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 12px 0;
+    margin: 28px 0 0;
+    border-top: 1px solid var(--sb-line-1);
+    border-bottom: 1px solid var(--sb-line-1);
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    color: var(--sb-ink-3);
+  }
+  .sb-meta-row span b {
+    color: var(--sb-ink-1);
+    font-weight: 500;
+  }
+  .sb-section-h {
+    font-size: 14px !important;
+    font-family: 'Geist Mono', monospace !important;
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase;
+    color: var(--sb-ink-3) !important;
+    margin: 56px 0 16px !important;
+    font-weight: 500 !important;
+    border: 0 !important;
+    padding: 0 !important;
+  }
+  .sb-persona-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+  @media (max-width: 880px) {
+    .sb-persona-grid { grid-template-columns: 1fr; }
+  }
+</style>

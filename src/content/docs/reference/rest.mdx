@@ -1,0 +1,211 @@
+---
+title: REST API
+description: Bearer-token authenticated JSON API. All endpoints are version-flat — the same server build serves both hosted (syncbins.com) and self-hosted boxes.
+sidebar:
+  order: 1
+---
+
+import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import Endpoint from '../../../components/Endpoint.astro';
+
+Bearer-token authenticated JSON API. All endpoints are version-flat: the same server build serves both hosted (syncbins.com) and self-hosted boxes. Payloads are validated against the zod schemas in `shared/src/api.ts` — that file is the source of truth.
+
+<Aside type="note" title="Schema source">
+Field types here mirror the zod schemas exactly. If something looks wrong, the schema wins — open an issue at [SyncBins/Docs](https://github.com/SyncBins/Docs/issues).
+</Aside>
+
+## Conventions
+
+- **Base URL:** `https://<your-box>/api`. Hosted is `https://syncbins.com/api`.
+- **Auth:** `Authorization: Bearer <session_token>`. Tokens are issued at pair time and rotated on revocation.
+- **IDs:** ULIDs (Crockford Base32, 26 chars). Lexicographically sortable by creation time.
+- **Timestamps:** milliseconds since epoch, integer.
+- **Binary fields:** base64 (standard, no URL-safe).
+- **Errors:** JSON envelope under `error` (see below). HTTP status reflects the failure class.
+
+<Tabs>
+  <TabItem label="curl">
+    ```sh
+    curl https://box.yourdomain.com/api/items?since=4218 \
+      -H "Authorization: Bearer ${SB_TOKEN}" \
+      -H "Accept: application/json"
+    ```
+  </TabItem>
+  <TabItem label="TypeScript">
+    ```ts
+    const res = await fetch(`${origin}/api/items?since=${since}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    if (!res.ok) throw new SyncBinsError(await res.json());
+    ```
+  </TabItem>
+</Tabs>
+
+## Items
+
+The core of the API. Items are append-mostly — you create them, fetch them since a version cursor, and soft-delete them.
+
+<Endpoint method="PUT" path="/items" tag="auth: device" desc="Create or replace an item. Idempotent on the client-supplied id.">
+  <Fragment slot="params">
+    - **`id`** `string` *required* — Client-generated ULID.
+    - **`bin_id`** `string` *required* — Target bin.
+    - **`type`** `ContentType` *required* — One of the 10 content types.
+    - **`ts`** `integer` *required* — Client timestamp (ms).
+    - **`nonce`** `base64(24)` *required* — XChaCha20 nonce.
+    - **`ct`** `base64` *required* — Ciphertext. Max 64 KB inline; use `blob_ref` for larger.
+    - **`wrapped`** `WrappedKey[]` *required* — K_item wrapped per active device pubkey.
+    - **`blob_ref`** `string | null` — Storage backend reference when ct lives in blob storage.
+  </Fragment>
+
+  ```json title="Request body"
+  {
+    "id": "01JC4M9KJ7XAHQ3RT8VFNPE2QH",
+    "bin_id": "01JC4ABCDEFGH",
+    "type": "password",
+    "ts": 1747843261000,
+    "nonce": "base64(24 bytes)",
+    "ct": "base64(ciphertext)",
+    "wrapped": [
+      { "device_id": "…", "key": "base64(48 bytes)" }
+    ],
+    "blob_ref": null
+  }
+  ```
+
+  ```json title="200 OK · response"
+  {
+    "id": "01JC4M9KJ7XAHQ3RT8VFNPE2QH",
+    "version": 4218,
+    "server_ts": 1747843261103
+  }
+  ```
+</Endpoint>
+
+<Endpoint method="GET" path="/items" tag="auth: device" desc="Page items since a version cursor. Used for catch-up after reconnect.">
+  <Fragment slot="params">
+    - **`since`** `integer` *required* — Last version the client saw.
+    - **`limit`** `integer` — Default 200, max 1000.
+    - **`bin_id`** `string` — Filter to a single bin.
+  </Fragment>
+
+  ```json title="200 OK · response"
+  {
+    "items": [
+      { "id": "…", "version": 4218, "bin_id": "…",
+        "type": "link", "ct": "…", "wrapped": [],
+        "ts": 1747843001000 }
+    ],
+    "head_version": 4218,
+    "has_more": false
+  }
+  ```
+</Endpoint>
+
+<Endpoint method="DELETE" path="/items/:id" tag="auth: device" desc="Soft delete. Hard delete runs nightly after 30 days.">
+  <Fragment slot="params">
+    - **`id`** `string` *required* — ULID of the item.
+  </Fragment>
+</Endpoint>
+
+## Blobs
+
+For items larger than 64 KB. Two-step flow: request a short-lived SAS URL, upload the ciphertext directly to your storage backend, then create the item with a `blob_ref` pointing at it.
+
+<Endpoint method="POST" path="/blobs/upload-url" tag="auth: device" desc="Get a pre-signed upload URL (Azure SAS / S3 / R2). Expires in 15 min.">
+  <Fragment slot="params">
+    - **`size`** `integer` *required* — Ciphertext size in bytes. Server enforces tenant cap.
+    - **`content_type`** `string` — Defaults to `application/octet-stream`.
+  </Fragment>
+</Endpoint>
+
+<Endpoint method="GET" path="/blobs/:ref/url" tag="auth: device" desc="Short-lived download URL (5 min). Refresh on 403." />
+
+## Devices & pairing
+
+Multi-step handshake described in [How encryption works → Pairing](/concepts/encryption/#pairing-a-new-device). Each step is its own endpoint so the existing device can stay in control of when to release the wrapped master key.
+
+<Endpoint method="POST" path="/devices/pair-init"     tag="auth: device" desc="Existing device starts a pair session, returns the 6-word code lookup id." />
+<Endpoint method="GET"  path="/devices/pair-fetch-epk" tag="auth: none (rate-limited)" desc="New device redeems the 6-word code for the existing device's ephemeral pubkey.">
+  <Fragment slot="params">
+    - **`code`** `string` *required* — BIP39 6-word string entered by the user.
+  </Fragment>
+</Endpoint>
+<Endpoint method="POST" path="/devices/pair-fetch-npk" tag="auth: none" desc="New device submits its pubkey + attestation. Server forwards to existing device over WS." />
+<Endpoint method="POST" path="/devices/pair-wrap"      tag="auth: device" desc="Existing device wraps the master key to the new device's pubkey." />
+
+<Endpoint method="GET"  path="/devices"            tag="auth: device" desc="List paired devices. Used by Settings → Devices." />
+<Endpoint method="POST" path="/devices/:id/revoke" tag="auth: device" desc="Revoke a device. Token is invalidated immediately; bundle of wrapped keys is purged on next item put." />
+
+## Bootstrap (first device)
+
+A brand-new server has no devices and no auth. The first device claims it through a one-shot bootstrap. After this returns, every subsequent device must go through pairing.
+
+<Endpoint method="POST" path="/devices/bootstrap"          tag="auth: none · one-shot" desc="Claim an empty server. 410 Gone once a device exists." />
+<Endpoint method="POST" path="/devices/bootstrap/restart"  tag="auth: admin · self-host only" desc="Re-arm bootstrap. Wipes all device records. Items are kept but unrecoverable." />
+
+## Account password
+
+<Endpoint method="POST" path="/password/set"    tag="auth: device" desc="Set or change the account password (second factor)." />
+<Endpoint method="POST" path="/password/verify" tag="auth: none"   desc="Verify before unsealing the master key on a new device." />
+<Endpoint method="GET"  path="/password/exists" tag="auth: none"   desc="Probe — is a password configured? Used by the unlock screen." />
+
+## Multi-tenant (hosted)
+
+Only mounted when `TENANT_MODE=multi`. Self-hosted boxes can ignore these.
+
+<Endpoint method="POST" path="/signup"          tag="auth: none"   desc="Allocate a new tenant + subdomain." />
+<Endpoint method="GET"  path="/tls-check"       tag="auth: none"   desc="Has Caddy provisioned a certificate for this subdomain yet?" />
+<Endpoint method="POST" path="/billing/webhook" tag="auth: stripe" desc="Stripe webhook receiver (subscription events)." />
+<Endpoint method="GET"  path="/billing/portal"  tag="auth: device" desc="Issues a Stripe customer portal session URL." />
+
+## Meta
+
+<Endpoint method="GET" path="/me"             tag="auth: device" desc="Current device info, server version, tenant stats." />
+<Endpoint method="GET" path="/syncbin/status" tag="auth: none"   desc="Liveness + bootstrap state. Used by deploy scripts." />
+
+## Error envelope
+
+Every non-2xx response carries a JSON body with a stable `error.code`. See [Error codes](/reference/errors/) for the full catalogue and recovery guidance.
+
+```json title="400 Bad Request · response"
+{
+  "error": {
+    "code": "item_too_large",
+    "message": "Inline payload limit is 64 KB. Use POST /blobs/upload-url for larger items.",
+    "hint": "See /reference/errors#item_too_large"
+  }
+}
+```
+
+| Status | Class | Common codes |
+|--------|-------|--------------|
+| `400` | Bad request | `invalid_payload`, `item_too_large` |
+| `401` | Unauthenticated | `missing_token`, `expired_token` |
+| `403` | Forbidden | `device_revoked`, `tenant_suspended` |
+| `404` | Not found | `item_not_found`, `bin_not_found` |
+| `409` | Conflict | `bootstrap_already_done`, `device_exists` |
+| `413` | Too large | `blob_too_large` |
+| `429` | Rate limited | `rate_limited` — backoff in `Retry-After` |
+| `500` | Server | `internal` — open a ticket |
+
+## Related references
+
+<CardGrid>
+  <LinkCard
+    title="WebSocket protocol"
+    description="Real-time fanout (push, not pull)."
+    href="/reference/ws/"
+  />
+  <LinkCard
+    title="Encryption envelope"
+    description="Exact byte layout of the ct field."
+    href="/reference/envelope/"
+  />
+  <LinkCard
+    title="Content types"
+    description="Payload shape for each type value."
+    href="/reference/types/"
+  />
+</CardGrid>

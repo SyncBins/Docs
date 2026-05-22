@@ -1,0 +1,170 @@
+---
+title: MCP server
+description: Let Cursor, Claude Desktop, or any MCP-aware agent read from and write to your SyncBins. `@syncbins/mcp` pairs as a regular device.
+sidebar:
+  order: 1
+---
+
+import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import Endpoint from '../../../components/Endpoint.astro';
+
+Let Cursor, Claude Desktop, or any MCP-aware agent read from and write to your SyncBins. `@syncbins/mcp` pairs as a regular device — same encryption envelope, same revocation, same per-device wrapped keys.
+
+<Aside type="note" title="What MCP is, briefly">
+MCP (Model Context Protocol) is a small RPC contract Anthropic published so agents can plug into tools the same way browsers plug into extensions. SyncBins ships an MCP server because "drop something where future-me can find it" is something agents also want to do.
+</Aside>
+
+## Install & pair
+
+```sh title="One-time setup"
+# 1) Install the MCP server
+npm install -g @syncbins/mcp
+
+# 2) Pair it with your SyncBins like any other device
+syncbins-mcp pair
+# > visit https://syncbins.com/pair
+# > enter code: forest-glide-river-lemon-cobalt-piano
+# > paired as: "Cursor (Gavin's MBP)"
+```
+
+The pair command opens a 6-word handshake just like any other device — see [Pairing more devices](/get-started/pairing/). Once paired the MCP server caches its session token at `~/.config/syncbins/mcp.json` (Linux/Mac) or `%APPDATA%/syncbins/mcp.json` (Windows).
+
+## Connecting an agent
+
+<Tabs syncKey="mcp-client">
+  <TabItem label="Cursor">
+    ```json title="~/.cursor/mcp.json"
+    {
+      "mcpServers": {
+        "syncbins": {
+          "command": "syncbins-mcp",
+          "args": ["serve"],
+          "env": {
+            "SYNCBINS_HOST": "https://syncbins.com"
+          }
+        }
+      }
+    }
+    ```
+  </TabItem>
+  <TabItem label="Claude Desktop">
+    ```json title="~/Library/Application Support/Claude/claude_desktop_config.json"
+    {
+      "mcpServers": {
+        "syncbins": {
+          "command": "syncbins-mcp",
+          "args": ["serve"]
+        }
+      }
+    }
+    ```
+  </TabItem>
+  <TabItem label="Any MCP client">
+    ```sh
+    syncbins-mcp serve --stdio
+    # Or over a Unix socket:
+    syncbins-mcp serve --socket /tmp/syncbins-mcp.sock
+    ```
+  </TabItem>
+</Tabs>
+
+After restarting the client you should see "syncbins" in its tool list. Ask it: *"What's in my scratchpad bin?"* and watch it call `sb_list_items`.
+
+## Available tools
+
+Four tools, deliberately small. Every call goes through the same encryption envelope as a human device — the MCP server cannot decrypt items meant for other devices (and vice-versa).
+
+<Endpoint method="POST" path="sb_put_item" tag="write" desc="Drop something into a bin. Accepts any of the 10 content types.">
+  <Fragment slot="params">
+    - **`bin`** `string` *required* — Bin slug or ID.
+    - **`type`** `ContentType` — Auto-detected from payload if omitted.
+    - **`payload`** `object` *required* — Shape per content type.
+  </Fragment>
+
+  ```json title="example call"
+  {
+    "tool": "sb_put_item",
+    "arguments": {
+      "bin": "scratchpad",
+      "type": "code",
+      "payload": {
+        "lang": "typescript",
+        "label": "useDebounce hook from the chat",
+        "text": "export function useDebounce<T>(v: T, ms = 200) { … }"
+      }
+    }
+  }
+
+  // Returns
+  { "id": "01JC4M…", "version": 4219 }
+  ```
+</Endpoint>
+
+<Endpoint method="GET" path="sb_list_items" tag="read" desc="Page items, newest first. Returns decrypted payloads.">
+  <Fragment slot="params">
+    - **`bin`** `string` — Defaults to all bins.
+    - **`limit`** `integer` — Default 20, max 200.
+    - **`since`** `ISO timestamp` — Page forward.
+  </Fragment>
+</Endpoint>
+
+<Endpoint method="GET" path="sb_search" tag="read" desc="Substring search across decrypted items. Runs locally in the MCP process.">
+  <Fragment slot="params">
+    - **`query`** `string` *required* — Free-text query.
+    - **`bin`** `string` — Optional bin filter.
+  </Fragment>
+</Endpoint>
+
+<Endpoint method="DELETE" path="sb_delete_item" tag="write" desc="Soft-delete by ID. Recoverable from trash for 30 days.">
+  <Fragment slot="params">
+    - **`id`** `string` *required* — ULID. Must be a known item.
+  </Fragment>
+</Endpoint>
+
+The agent must already know the ID — there is no "delete by query" tool, by design. This prevents an off-script agent from wiping your bins.
+
+## Suggested usage patterns
+
+### Agent memory across sessions
+
+The simplest win. Tell the agent at the start of every session: *"Read your `agent-memory` bin before answering, and jot a note there at the end."* The bin becomes a durable scratchpad the agent can use across days, models, and machines.
+
+### Credential vending
+
+Keep `password`-type items in a `secrets` bin. When the agent needs a token, ask for it by service name — the tool call decrypts locally and the cleartext only lives in the tool response (which Claude/Cursor scope to the agent process).
+
+<Aside type="caution" title="Trust boundary">
+The agent has the same access as any paired device. If you don't want it to see your `passwords` bin, don't pair it — or pair it and exclude that bin via the `SYNCBINS_BINS` environment variable.
+</Aside>
+
+### Cross-machine handoff
+
+Working on your Mac, want a file on your Linux box? "Drop this in the `handoff` bin." Same bin, different device, one minute later it's on the laptop.
+
+## Security model
+
+- MCP server pairs as a device — same Curve25519 keypair, same revocation flow.
+- Cached session token is restricted to the host that paired (HMAC of stable machine ID).
+- Tools are *not* rate-limited by default — assume the agent can call them in a loop.
+- Revoke from Settings → Devices the moment you stop trusting the agent process.
+
+## Current limitations
+
+- No streaming responses (MCP supports it; ours doesn't yet).
+- Blob items (>64 KB) are listed but not yet downloaded inline — the agent gets a SAS URL.
+- One MCP server per machine. Run a second pair as a sub-user if you need to isolate agents.
+
+## Going deeper
+
+<CardGrid>
+  <LinkCard
+    title="REST API"
+    description="The MCP server is a thin wrapper over this."
+    href="/reference/rest/"
+  />
+  <LinkCard
+    title="How encryption works"
+    description="Same envelope as every other device."
+    href="/concepts/encryption/"
+  />
+</CardGrid>

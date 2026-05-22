@@ -1,0 +1,104 @@
+---
+title: Recovery scenarios
+description: Five real-world things that go wrong with a SyncBins account — and exactly what to do in each case.
+sidebar:
+  order: 6
+  badge:
+    text: New
+    variant: tip
+---
+
+import { Aside, Steps, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+Five real-world things that go wrong. Find your scenario, follow the steps. If your situation doesn't match any of these, jump to [I'm in trouble](#im-in-trouble-and-none-of-the-above-applies) at the bottom.
+
+## 1. "I lost my phone"
+
+You still have at least one other paired device (laptop, tablet, browser tab). Everything is fine. You just need to revoke the lost device.
+
+<Steps>
+1. On a device you still have, go to **Settings → Devices**.
+2. Find the missing device in the list. Click **Revoke**.
+3. Confirm. The revoked device's session token is invalidated immediately and its wrapped-key bundle is purged on the next item you create.
+4. If you got a replacement phone, pair it fresh — see [Pairing more devices](/get-started/pairing/).
+</Steps>
+
+<Aside type="note">
+Revocation prevents *future* sync, not past. Items the lost device already downloaded are still on it. If the phone is wiped (Find My iPhone / Find My Device), the local data goes too.
+</Aside>
+
+## 2. "I cleared my browser / reinstalled the app"
+
+This is treated the same as a brand-new device. You'll need to re-pair.
+
+<Steps>
+1. On a device you still have signed in, go to **Settings → Devices → Pair new device**.
+2. Get the 6-word code or QR.
+3. On the cleared browser, hit "Pair this device" and enter the code.
+4. Your bins re-sync. Existing items download as the wrapped-key bundle updates.
+</Steps>
+
+If the cleared browser was your **only paired device**, this becomes scenario 4 — see below.
+
+## 3. "I forgot my PIN"
+
+The PIN is just a convenience wrapper. You can always fall back to the recovery phrase.
+
+<Steps>
+1. On the lock screen, tap **Other unlock methods → Use recovery phrase**.
+2. Type the 12 words.
+3. Once unlocked, go to **Settings → Encryption → Reset PIN** and set a new one.
+</Steps>
+
+If you can unlock with the PIN but want to change it (e.g. someone saw you type it), same path — Settings → Encryption → Reset PIN.
+
+## 4. "All my devices are gone"
+
+You wiped/lost every paired device. As long as you still have the 12-word recovery phrase, you can bring everything back on a new device.
+
+<Steps>
+1. Open syncbins.com on the new device (or your self-hosted URL).
+2. Click **I have a recovery phrase**.
+3. Enter the 12 words. The master key is re-derived locally; the device pairs itself into the account.
+4. All your bins and items sync down. This can take a few minutes for a large account.
+</Steps>
+
+<Aside type="caution" title="Without the phrase, this scenario is fatal">
+The server never sees your recovery phrase. We literally cannot recover it for you. If you lose every paired device *and* the phrase, your bins are gone. This is the price of end-to-end encryption.
+
+Treat the phrase like the seed phrase for a hardware wallet. Paper, fireproof safe, password manager — pick at least two.
+</Aside>
+
+## 5. "I'm starting fresh on a new server"
+
+You're migrating from syncbins.com to a self-hosted box (or between two self-hosted boxes). Items don't auto-migrate — you'll export and re-import.
+
+<Steps>
+1. On a device paired to the **old** server, go to **Settings → Export**.
+2. Choose "Encrypted archive" (recommended) or "Plain JSON" (only if you're moving to non-SyncBins).
+3. Download the file. The encrypted archive is unlockable only with your existing recovery phrase.
+4. On the **new** server, run the bootstrap flow ([Self-Hosting → Quick start](/self-hosting/quickstart/#bootstrap-your-first-device)).
+5. Settings → Import → upload the archive. Provide your old recovery phrase if encrypted.
+6. New device IDs, new server, same content. Revoke or shut down the old server when you're sure.
+</Steps>
+
+## I'm in trouble and none of the above applies
+
+Drop a line to **gavin@syncbins.com** with as much context as you can: when it started, what device, what changed recently, what error you see (if any). Don't include your recovery phrase or PIN — ever — even with us.
+
+For self-hosted: also grab `docker compose logs syncbins --tail=200` and the output of `GET /api/syncbin/status`. Half the issues are obvious from those two.
+
+## Going deeper
+
+<CardGrid>
+  <LinkCard
+    title="Pairing more devices"
+    description="The standard handshake — QR or 6 words."
+    href="/get-started/pairing/"
+  />
+  <LinkCard
+    title="The device model"
+    description="What pairing, revocation, and recovery actually do under the hood."
+    href="/concepts/devices/"
+  />
+</CardGrid>

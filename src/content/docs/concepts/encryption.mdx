@@ -8,37 +8,44 @@ sidebar:
 import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
 import Lens from '../../../components/Lens.astro';
 
-The plain-English version of the threat model. Every byte the server sees is ciphertext; the master key is derived from a 12-word phrase and never leaves your device. Here's the full envelope, the pairing handshake, and exactly what the server can and can't see.
+Everything you save in SyncBins is encrypted on your device before it ever touches the server. The server stores scrambled bytes — it can't read your passwords, notes, or files. Even if the server were compromised, your data stays private.
+
+This page explains how that works, step by step. You don't need to read it to use SyncBins — but if you're the kind of person who wants to know what's under the hood, this is for you.
 
 ## Primitives
 
-SyncBins only uses well-vetted, NaCl-family primitives — there's no custom crypto. Every primitive in the table below ships in libsodium and is exposed through `libsodium-wrappers` on the web client.
+SyncBins only uses well-vetted, NaCl-family primitives — there's no custom crypto. Every primitive in the table below ships in libsodium and is exposed through `libsodium-wrappers-sumo` on the web client and server.
 
 | Use | Primitive | Library call |
 |-----|-----------|--------------|
 | Symmetric encryption (items, blobs) | `XChaCha20-Poly1305` | `crypto_aead_xchacha20poly1305_ietf_*` |
-| Key wrapping (K_item → device) | `Curve25519 sealed box` | `crypto_box_seal` |
-| Master-key derivation | `Argon2id` (t=3, m=64MB) | `crypto_pwhash` |
-| Recovery phrase | `BIP39` 128-bit entropy | — |
-| Pairing handshake | `X25519 + HMAC-SHA-256` | `crypto_kx_*` + `crypto_auth` |
+| Key wrapping (K_item → device) | `Curve25519 sealed box` | `crypto_box_seal` / `_open` |
+| Master-key derivation | `Argon2id` (t=3, m=64 MiB) | `crypto_pwhash` |
+| PIN key stretching | `Argon2id` (t=4, m=64 MiB) | `crypto_pwhash` |
+| Recovery phrase | `BIP39` 128-bit entropy | `@scure/bip39` |
+| Pairing shared secret | `BLAKE2b` | `crypto_generichash` |
+| Pairing attestation | `HMAC-SHA512-256` | `crypto_auth` / `_verify` |
+| Device reauth challenge | `Curve25519 sealed box` | `crypto_box_seal` / `_open` |
+| Session tokens | `SHA-256` (server-side hash) | Node `crypto.createHash` |
+| Blob signed URLs | `HMAC-SHA256` | Node `crypto.createHmac` |
 
 ## From 12 words to a master key
 
 During onboarding we generate 128 bits of entropy and encode it as a BIP39 12-word phrase. The phrase is the only thing you have to back up.
 
-```ts title="client/crypto/master.ts"
-// 12-word phrase → master key (client-side, never sent to server)
-const seed   = bip39ToSeed(phrase);                       // 64 bytes
-const salt   = sha256("syncbins.master.v1");              // fixed, app-wide
+```ts title="crypto/phrase.ts (client-side, simplified)"
+// 12-word phrase → master key — never sent to server
+const seed   = bip39ToSeed(phrase);                       // 64 bytes (PBKDF2-HMAC-SHA512)
+const salt   = blake2b("SyncBins/v1/master-salt", 16);    // fixed 16-byte salt
 const master = await argon2id(seed, salt, {
-  t: 3, m: 64 * 1024, p: 1, len: 32,                      // 64 MB, ~700ms on laptop
+  t: 3, m: 64 * 1024, p: 1, len: 32,                     // 64 MiB, ~700 ms on laptop
 });
 ```
 
-The master key is used for **pairing** and **recovery only** — it does not directly encrypt items. Each device generates its own Curve25519 keypair on first run; the device's private key is itself sealed to the master key and stored locally.
+The master key is used for **device key wrapping** and **recovery only** — it does not directly encrypt items. Each device generates its own Curve25519 keypair on first run; the device's secret key is wrapped (encrypted) to the master key using XChaCha20-Poly1305 and stored in the browser's IndexedDB.
 
 <Aside type="tip" title="The PIN shortcut">
-Re-deriving the master key from the phrase takes ~700ms — fine for setting up a new device, annoying every time the browser locks. Setting a PIN (6+ digits) wraps the master key locally with a separate Argon2id pass keyed on the PIN. Next unlock is an Argon2id round on a short string — sub-100ms. See [Quick-unlock PIN](/get-started/quick-unlock/).
+Re-deriving the master key from the phrase takes ~700 ms — fine for setting up a new device, annoying every time the browser locks. Setting a **PIN** (6+ digits) wraps the master key locally with a separate Argon2id pass (t=4, 64 MiB) keyed on the PIN. Next unlock is near-instant. The PIN never leaves the browser — it's stored in localStorage as an encrypted blob, and after 5 wrong attempts it's wiped. See [Quick-unlock PIN](/get-started/quick-unlock/).
 </Aside>
 
 ## The item envelope
@@ -202,7 +209,17 @@ The 6-word pair code you see in the UI is a hash of an ephemeral public key. The
   </svg>
 </div>
 
-The attestation in step 3 proves the new device knows the shared secret (i.e. read the 6 words from the existing device — not just intercepted them). The master key is only wrapped after the existing device verifies it.
+The attestation in step 3 proves the new device knows the shared secret — derived from `BLAKE2b(ephemeralPubkey || code)` — meaning it physically read the 6 words from the existing device, not just intercepted them on the wire. The master key is sealed with `crypto_box_seal` to the new device's pubkey and only delivered after the server verifies the attestation.
+
+## Returning to your device
+
+When you come back after closing the browser, your session token may have expired (tokens last 30 days). SyncBins handles this without making you pair again:
+
+1. **PIN unlock** — your PIN decrypts the master key from localStorage, which in turn unlocks your device's Curve25519 keypair from IndexedDB.
+2. **Token refresh** — if the bearer token is still valid, it's refreshed automatically.
+3. **Challenge-response reauth** — if the token has expired, the client proves it still holds the device's secret key. The server generates a random challenge, seals it with `crypto_box_seal` to your device's public key, and the client opens it with the secret key. This proves key possession without sending any secret over the wire — and the server issues a fresh token.
+
+If even the reauth fails (e.g. the device was revoked), you'll be guided to re-pair from another active device.
 
 ## Threat model summary
 

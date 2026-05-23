@@ -4,7 +4,7 @@ description: SyncBins — a single-user, end-to-end encrypted personal sharing p
 template: splash
 hero:
   tagline: |
-    A single-user, end-to-end encrypted personal sharing portal. Comprehensive docs for setup, self-hosting, and developer integration — from your first item to the WebSocket protocol.
+    Your private bins. Always in sync. Stash passwords, links, code, photos, voice memos — anything you'd copy-paste between devices — in a single encrypted space that only you can read. Use it hosted or run your own server.
   actions:
     - text: Get started
       link: /get-started/welcome/
@@ -22,6 +22,8 @@ hero:
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 import PersonaCard from '../../components/PersonaCard.astro';
+
+<img src="/syncbins-banner.png" alt="SyncBins — Your private bins. Always in Sync." style="width: 100%; border-radius: 12px; margin-bottom: 24px;" loading="eager" decoding="async" />
 
 <div class="sb-meta-row">
   <span class="sb-meta-item">
@@ -65,22 +67,22 @@ import PersonaCard from '../../components/PersonaCard.astro';
 
 <CardGrid>
   <Card title="End-to-end encrypted" icon="seti:lock">
-    XChaCha20-Poly1305 + Curve25519. Server stores ciphertext only — never the master key.
+    Everything you save is encrypted before it leaves your device. The server only sees scrambled bytes — it can never read your passwords, notes, or files. Not even us.
   </Card>
-  <Card title="Self-hostable" icon="rocket">
-    One Docker compose on a VPS, homelab PC, or Raspberry Pi (arm64). BYO Azure Blob, S3, R2, or local disk.
-  </Card>
-  <Card title="Real-time sync" icon="bars">
-    WebSocket fanout to every paired device. Drops are visible across devices in under 1s.
+  <Card title="Instant sync" icon="bars">
+    Drop something on your laptop, see it on your phone in under a second. All your devices stay up to date in real time.
   </Card>
   <Card title="10 content types" icon="open-book">
-    Passwords, links, code, voice memos, screenshots — each with a custom renderer.
+    Passwords, links, code, notes, voice memos, screenshots, files — each one gets its own look and feel. Just paste, drag, or type.
+  </Card>
+  <Card title="Self-hostable" icon="rocket">
+    Run your own server with one Docker command on a $4 VPS, a homelab, or a Raspberry Pi. Or skip the setup and use syncbins.com.
   </Card>
   <Card title="Agent-ready" icon="seti:default">
-    `@syncbins/mcp` exposes the same store to Cursor, Claude Desktop, and any MCP client.
+    The MCP integration lets AI assistants like Cursor and Claude read and write to your bins — your personal knowledge base, accessible to your tools.
   </Card>
-  <Card title="Single user, by design" icon="seti:plan">
-    No teams, no sharing, no permission models. Future-you is the only audience.
+  <Card title="Just for you" icon="seti:plan">
+    No teams, no sharing, no permissions. SyncBins is your private space — future-you on another device is the only audience.
   </Card>
 </CardGrid>
 

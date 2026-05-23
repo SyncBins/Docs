@@ -8,7 +8,7 @@ SyncBins is a personal sharing portal — a place to drop passwords, links, scre
 ## Prerequisites
 
 - A modern browser (Chrome, Firefox, Safari, Edge)
-- A SyncBins account at [syncbins.com](https://syncbins.com), or a [self-hosted instance](/guides/self-hosting/)
+- A SyncBins account at [syncbins.com](https://syncbins.com), or a [self-hosted instance](/self-hosting/quickstart/)
 
 ## 1. Create an account
 

@@ -64,6 +64,7 @@ export default defineConfig({
           label: 'Self-Hosting',
           items: [
             { label: 'Quick start (Docker)',   slug: 'self-hosting/quickstart' },
+            { label: 'Raspberry Pi',           slug: 'self-hosting/raspberry-pi', badge: { text: 'New', variant: 'tip' } },
             { label: 'Choosing storage',       slug: 'self-hosting/storage', badge: { text: 'New', variant: 'tip' } },
             { label: 'TLS & domains',          slug: 'self-hosting/tls' },
             { label: 'Backups & restore',      slug: 'self-hosting/backups' },

@@ -148,3 +148,5 @@ For blob storage, rely on the provider's built-in redundancy and versioning. If 
 ## Hardware requirements
 
 SyncBins is intentionally lightweight. A 1-vCPU / 512 MB RAM VPS handles a single user comfortably. The $4/mo hosting cost dominates over Azure Blob at ~$0.02/GB-mo — 50 GB of content costs about $1/mo in storage.
+
+**Raspberry Pi:** Pi 4 or 5 with **64-bit** Raspberry Pi OS and Docker. Published GHCR images include `linux/arm64`. See the dedicated guide: [Raspberry Pi](/self-hosting/raspberry-pi/).

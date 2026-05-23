@@ -1,0 +1,156 @@
+---
+title: Raspberry Pi
+description: Run SyncBins on a Pi 4 or 5 with 64-bit Raspberry Pi OS — same Docker image as x86, pulled automatically as linux/arm64.
+sidebar:
+  order: 2
+---
+
+import { Aside, Steps, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+SyncBins runs well on a **Raspberry Pi 4 or 5** with **2 GB RAM or more** and **64-bit Raspberry Pi OS** (Bookworm or later). Published images on GHCR include **`linux/arm64`** alongside `linux/amd64` — Docker on the Pi pulls the correct architecture with no special tag.
+
+<Aside type="caution" title="64-bit OS required">
+32-bit Raspberry Pi OS is **not** supported (Node 20 and release images target arm64). Pi 2 and older are out of scope.
+</Aside>
+
+## Recommended: Docker (no build on the Pi)
+
+Use the same flow as [Quick start with Docker](/self-hosting/quickstart/) — preferably the **deploy zip** from [GitHub Releases](https://github.com/SyncBins/App/releases) so you do not need to clone the App repo on the device.
+
+### Prerequisites
+
+- Raspberry Pi OS **64-bit**
+- [Docker Engine](https://docs.docker.com/engine/install/) and the Compose plugin
+- A public domain with DNS → your Pi **or** [homelab HTTPS with mkcert](/self-hosting/tls/#local-network-homelab-https) (required for phone pairing — plain `http://192.168.x.x` breaks Web Crypto on iOS)
+
+### Install
+
+<Steps>
+
+1. On the Pi, download and unzip `syncbins-deploy-*.zip` from [GitHub Releases](https://github.com/SyncBins/App/releases).
+
+2. Configure env:
+
+   ```sh
+   cp .env.example .env
+   ```
+
+   ```ini title=".env"
+   DOMAIN=box.yourdomain.com
+   BLOB_URL_SECRET=…          # openssl rand -hex 32
+   SYNCBINS_IMAGE_TAG=0.1.0-alpha.1   # match the release you downloaded
+   ```
+
+3. Start:
+
+   ```sh
+   docker compose pull
+   docker compose up -d
+   docker compose logs -f syncbins
+   ```
+
+4. Open your HTTPS URL and complete onboarding immediately (first device claims the server).
+
+</Steps>
+
+### Verify
+
+```sh
+docker compose exec syncbins uname -m
+# expect: aarch64
+```
+
+```sh
+curl -s "https://${DOMAIN}/api/health"
+# {"ok":true,"version":"…"}
+```
+
+## Low memory (2 GB Pi)
+
+- Prefer **`docker compose pull`** from GHCR — do not build the image on the Pi unless you are patching source (first build can take 30+ minutes).
+- If the container is OOM-killed under load, cap Node heap in `docker-compose.yml`:
+
+  ```yaml
+  environment:
+    NODE_OPTIONS: "--max-old-space-size=768"
+  ```
+
+- Keep **local disk** storage ([default](/self-hosting/storage/)) — no extra cloud services on a small board.
+
+## Hardware notes
+
+| Device | Fit |
+| --- | --- |
+| Pi 5 / Pi 4 (2 GB+) | Recommended for Docker self-host |
+| Pi 3 (64-bit OS) | Possible; 1 GB RAM is tight — use Docker, avoid building from source |
+| Pi 2 and older | Not supported |
+
+## Alternative: native Node (no Docker)
+
+Only if Docker is not an option. You need **Node.js 20+** and build tools for `better-sqlite3`:
+
+```sh
+sudo apt update
+sudo apt install -y build-essential python3 git
+# Install Node 20+ (Nodesource, nvm, or fnm)
+
+git clone https://github.com/SyncBins/App.git syncbins
+cd syncbins
+npm ci
+npm run rebuild:native
+npm run build
+```
+
+Set production paths (example):
+
+```sh
+export LISTEN_HOST=0.0.0.0
+export LISTEN_PORT=8080
+export SQLITE_PATH=/var/lib/syncbins/syncbins.db
+export LOCAL_BLOB_DIR=/var/lib/syncbins/blobs
+export BLOB_URL_SECRET="$(openssl rand -hex 32)"
+export DOMAIN=box.yourdomain.com
+mkdir -p /var/lib/syncbins/blobs
+npm run start --workspace @syncbins/server
+```
+
+Put **Caddy** or **nginx** in front for HTTPS. See [TLS & domains](/self-hosting/tls/).
+
+<Aside type="note" title="systemd">
+For a persistent service, run under a dedicated user with `EnvironmentFile=/etc/syncbins/env` pointing at the variables above. Full example: [App `docker/deploy/RASPBERRY-PI.md`](https://github.com/SyncBins/App/blob/main/docker/deploy/RASPBERRY-PI.md).
+</Aside>
+
+## Building the image on the Pi (optional)
+
+If you patch the App repo and need a local image:
+
+```sh
+docker buildx build --platform linux/arm64 -f docker/Dockerfile -t syncbins:local .
+```
+
+Prefer release images from GHCR for day-to-day use.
+
+## What's next
+
+<CardGrid>
+  <LinkCard
+    title="Quick start with Docker"
+    description="Same stack on a VPS or homelab PC."
+    href="/self-hosting/quickstart/"
+  />
+  <LinkCard
+    title="TLS & domains"
+    description="Let's Encrypt or mkcert on your LAN."
+    href="/self-hosting/tls/"
+  />
+  <LinkCard
+    title="Choosing storage"
+    description="Local disk is the default on a Pi."
+    href="/self-hosting/storage/"
+  />
+  <LinkCard
+    title="Backups & restore"
+    description="Snapshot ./data before upgrades."
+    href="/self-hosting/backups/"
+  />
+</CardGrid>

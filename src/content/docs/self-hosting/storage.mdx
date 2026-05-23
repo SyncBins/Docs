@@ -1,6 +1,6 @@
 ---
 title: Choosing storage
-description: Local disk, Cloudflare R2, or Azure Blob — how SyncBins stores encrypted blobs and what to put in .env.
+description: Local disk, AWS S3, Cloudflare R2, or Azure Blob — how SyncBins stores encrypted blobs and what to put in .env.
 sidebar:
   order: 2
   badge:
@@ -12,13 +12,14 @@ import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/com
 
 SyncBins stores **metadata in SQLite** and **large ciphertext blobs** (screenshots, files, audio) in a pluggable backend. The server never sees plaintext — blobs are encrypted on your device before upload.
 
-**Default for self-hosters: local disk.** No cloud account, no extra env vars beyond the [quick start](/self-hosting/quickstart/). Switch to R2 or Azure only if you want blobs off the VPS or need more durability than a single disk.
+**Default for self-hosters: local disk.** No cloud account, no extra env vars beyond the [quick start](/self-hosting/quickstart/). Switch to S3, R2, or Azure only if you want blobs off the VPS or need more durability than a single disk.
 
 ## TL;DR
 
 | Backend | When to use | Extra env vars |
 |---------|-------------|----------------|
 | **Local disk** | Homelab, VPS, “just run it” | None (`STORAGE_KIND=local` is the default) |
+| **AWS S3** | Standard cloud object storage | `STORAGE_KIND=s3` + `S3_*` vars |
 | **Cloudflare R2** | Cheap cloud blobs, zero egress | `STORAGE_KIND=r2` + four `R2_*` vars |
 | **Azure Blob** | Already on Azure | `STORAGE_KIND=azure` + connection string |
 
@@ -29,6 +30,7 @@ There is no Settings UI for this — configure at **deploy time** in `docker/.en
 | Backend | Cost / GB-mo | Egress | Setup | Best for |
 |---------|--------------|--------|-------|----------|
 | **Local disk** | $0 (your hardware) | $0 | 1 min | Most self-hosters |
+| **AWS S3** | ~$0.023 (Standard) | Per-GB | 5 min | AWS shops, widest ecosystem |
 | **Cloudflare R2** | ~$0.015 | **$0** | 5 min | Cloud without egress surprise |
 | **Azure Blob** | ~$0.018 (Hot) | Per-GB | 10 min | Azure shops |
 
@@ -47,6 +49,21 @@ Items under ~64 KB stay **inline in SQLite** — only larger payloads hit blob s
     Blobs live as `{ulid}.bin` under `LOCAL_BLOB_DIR`. In Docker, bind-mount `./data:/data` so both SQLite and blobs survive container rebuilds.
 
     **You do not need R2, S3, or Azure** for a fully working self-hosted SyncBins. This is what the dev compose uses.
+  </TabItem>
+
+  <TabItem label="AWS S3">
+    ```ini title="docker/.env"
+    STORAGE_KIND=s3
+    S3_ACCESS_KEY_ID=…
+    S3_SECRET_ACCESS_KEY=…
+    S3_REGION=us-east-1
+    S3_BUCKET=syncbins
+    BLOB_URL_SECRET=…
+    ```
+
+    Create a bucket in the AWS console (or via CLI), generate an IAM user with `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject`, and `s3:HeadObject` permissions scoped to the bucket, then paste the credentials into `.env`.
+
+    The `S3_ENDPOINT` variable is optional — set it to use S3-compatible services like **MinIO**, **DigitalOcean Spaces**, or **Backblaze B2**.
   </TabItem>
 
   <TabItem label="Cloudflare R2">
@@ -76,8 +93,8 @@ Items under ~64 KB stay **inline in SQLite** — only larger payloads hit blob s
   </TabItem>
 </Tabs>
 
-<Aside type="caution" title="AWS S3">
-The server today ships drivers for **local**, **R2**, and **Azure**. Generic AWS S3 is not a separate `STORAGE_KIND` yet. R2 is S3-compatible and is the usual choice for homelabbers who want object storage without egress fees.
+<Aside type="tip" title="S3-compatible services">
+The `s3` backend works with any S3-compatible service. Set `S3_ENDPOINT` to point at **MinIO**, **DigitalOcean Spaces**, **Backblaze B2**, or similar. The `r2` backend remains a separate option with its own R2-specific endpoint logic.
 </Aside>
 
 ## How big a bucket?

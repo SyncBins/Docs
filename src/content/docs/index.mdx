@@ -68,7 +68,7 @@ import PersonaCard from '../../components/PersonaCard.astro';
     XChaCha20-Poly1305 + Curve25519. Server stores ciphertext only — never the master key.
   </Card>
   <Card title="Self-hostable" icon="rocket">
-    Single Go binary or one Docker compose. BYO Azure Blob, S3, R2, or local disk.
+    One Docker compose on a VPS, homelab PC, or Raspberry Pi (arm64). BYO Azure Blob, S3, R2, or local disk.
   </Card>
   <Card title="Real-time sync" icon="bars">
     WebSocket fanout to every paired device. Drops are visible across devices in under 1s.
@@ -98,6 +98,12 @@ import PersonaCard from '../../components/PersonaCard.astro';
     eyebrow="Self-host"
     title="Quick start with Docker"
     href="/self-hosting/quickstart/"
+  />
+  <PersonaCard
+    icon="server"
+    eyebrow="Self-host"
+    title="Raspberry Pi"
+    href="/self-hosting/raspberry-pi/"
   />
   <PersonaCard
     icon="mcp"

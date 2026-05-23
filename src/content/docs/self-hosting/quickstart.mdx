@@ -43,21 +43,23 @@ A SyncBins instance you control. Metadata in SQLite on disk; encrypted blobs on 
 
     ### Prerequisites
 
-    - A VPS or homelab box with Docker
-    - A domain (e.g. `box.yourdomain.com`) pointing at the box
-    - Ports 80/443 open for ACME
+    - A VPS, homelab PC, or **[Raspberry Pi 4/5](/self-hosting/raspberry-pi/)** (64-bit OS) with Docker
+    - A domain (e.g. `box.yourdomain.com`) pointing at the box — or [homelab HTTPS](/self-hosting/tls/#local-network-homelab-https) on a LAN
+    - Ports 80/443 open for ACME (public domain) or mkcert (LAN)
 
     ### Steps
 
     <Steps>
 
-    1. **Clone the App repo** and go to the docker folder:
+    1. **Get the compose bundle** — either download `syncbins-deploy-*.zip` from [GitHub Releases](https://github.com/SyncBins/App/releases) (recommended on a Pi), or clone the App repo:
 
        ```sh
        git clone https://github.com/SyncBins/App.git
        cd App/docker
        cp .env.example .env
        ```
+
+       Release zips include `docker-compose.yml`, `Caddyfile`, and `.env.example` ready to run.
 
     2. **Set two required values** in `.env`:
 
@@ -113,6 +115,11 @@ If local disk isn't enough, set `STORAGE_KIND=r2` or `STORAGE_KIND=azure` and th
 ## What's next
 
 <CardGrid>
+  <LinkCard
+    title="Raspberry Pi"
+    description="Pi 4/5 with 64-bit OS — arm64 images, no special tag."
+    href="/self-hosting/raspberry-pi/"
+  />
   <LinkCard
     title="Choosing storage"
     description="Local vs R2 vs Azure — when to upgrade."

@@ -21,7 +21,7 @@ This list describes what exists today, not a promise of stability.
 
 ## How releases work (maintainers)
 
-Pushing a git tag `v0.1.0-alpha.N` triggers CI to build the Docker image (`ghcr.io/syncbins/syncbins`), push to GHCR, and attach a deploy zip. See [App README → Cut an alpha release](https://github.com/SyncBins/App#cut-an-alpha-release-maintainers).
+Pushing a git tag `v0.1.0-alpha.N` triggers CI to build multi-arch Docker images (`linux/amd64`, `linux/arm64`) as `ghcr.io/syncbins/syncbins`, push to GHCR, and attach a deploy zip. **Raspberry Pi** and other ARM hosts pull the arm64 manifest automatically. See [App README → Cut an alpha release](https://github.com/SyncBins/App#cut-an-alpha-release-maintainers) and [Raspberry Pi](/self-hosting/raspberry-pi/).
 
 Self-hosters: [Upgrades](/self-hosting/upgrades/).
 

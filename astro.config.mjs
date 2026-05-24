@@ -6,6 +6,9 @@ import starlight from '@astrojs/starlight';
 const facebookAppId = process.env.FACEBOOK_APP_ID?.trim();
 
 const head = [
+  { tag: 'link', attrs: { rel: 'icon', type: 'image/png', sizes: '96x96', href: '/favicon-96x96.png' } },
+  { tag: 'link', attrs: { rel: 'icon', href: '/favicon.ico' } },
+  { tag: 'link', attrs: { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' } },
   { tag: 'link', attrs: { rel: 'manifest', href: '/site.webmanifest' } },
   { tag: 'meta', attrs: { name: 'theme-color', content: '#0c0b0e', media: '(prefers-color-scheme: dark)' } },
   { tag: 'meta', attrs: { name: 'theme-color', content: '#faf8f5', media: '(prefers-color-scheme: light)' } },

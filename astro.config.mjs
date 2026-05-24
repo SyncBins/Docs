@@ -28,7 +28,7 @@ export default defineConfig({
   site: 'https://docs.syncbins.com',
   integrations: [
     starlight({
-      title: 'SyncBins',
+      title: 'SyncBins™',
       description: 'SyncBins documentation — personal sharing portal, end-to-end encrypted, self-hostable.',
       favicon: '/favicon.svg',
       head,

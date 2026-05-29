@@ -32,7 +32,7 @@ Pairing gives a new device:
 2. The **master key**, wrapped to that device's fresh Curve25519 public key.
 3. A path to **historical items** via background re-wrap from devices that can still decrypt them.
 
-The six-word code is the out-of-band secret that lets the new device prove it isn't an impostor on the network. See [Pairing more devices](/get-started/pairing/) for the UI flow and [How encryption works](/concepts/encryption/#pairing-a-new-device) for the message sequence.
+The QR (or six-word) code is the out-of-band secret that lets the new device prove it isn't an impostor on the network, and a **6-digit verification code** shown on both devices — which you approve on the existing one — binds the master-key transfer to the device you actually scanned. See [Pairing more devices](/get-started/pairing/) for the UI flow and [How encryption works](/concepts/encryption/#pairing-a-new-device) for the message sequence.
 
 ## Revocation = evicting a keyholder
 

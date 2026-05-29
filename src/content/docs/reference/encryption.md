@@ -13,8 +13,9 @@ All cryptography uses [libsodium](https://doc.libsodium.org/) (NaCl). No custom 
 |-----------|-----------|---------|
 | Symmetric encryption | XChaCha20-Poly1305 (`crypto_aead_xchacha20poly1305_ietf`) | Encrypting item payloads |
 | Asymmetric key exchange | Curve25519 + XSalsa20-Poly1305 (`crypto_box_seal`) | Wrapping item keys per device |
-| Key derivation | Argon2id (`crypto_pwhash`) | Master key from recovery phrase |
-| Authentication | HMAC-SHA256 | Pair code attestation |
+| Key derivation | Argon2id (`crypto_pwhash`) | Master key from recovery phrase; PIN/passphrase wrapping |
+| Pair attestation | `crypto_auth` (HMAC-SHA-512-256) | Proving the new device read the pair code |
+| Item authentication | `crypto_auth` (HMAC-SHA-512-256), master-key-derived key | The per-item `sig` tag (forgery/relabel resistance) |
 
 ## Master key
 
@@ -47,22 +48,31 @@ Every item is encrypted with its own random key:
    ```
    ciphertext = AEAD_Encrypt(K_item, nonce, plaintext, AAD)
    ```
-   AAD (additional authenticated data) = `binId || type || ts`. This binds the ciphertext to its metadata — swapping the bin or timestamp breaks authentication.
-3. **Wrap** `K_item` for each non-revoked device using `crypto_box_seal` (an ephemeral-static Diffie-Hellman):
+   AAD (additional authenticated data) = `type || ts`. `binId` is deliberately **not** in the AAD (so an item can move bins without re-encrypting its body) — instead it is covered by the authentication tag below.
+3. **Wrap** `K_item` for each non-revoked device using `crypto_box_seal`, and also to the master key (`secretbox`) so any device holding MK can decrypt:
    ```
    wrappedKey[deviceId] = crypto_box_seal(K_item, device.pubkey)
+   master             = secretbox(K_item, masterKey)
    ```
-4. **Send** `{ ciphertext, nonce, wrappedKeys }` to the server as `payloadEnc`.
+4. **Authenticate** the item with a MAC the server cannot compute:
+   ```
+   K_mac = BLAKE2b(masterKey, "syncbins-item-mac-v1", 32)
+   sig   = crypto_auth(K_mac, canonical(id, binId, type, ts, ciphertext, nonce
+                                        [, blobRef, blobNonce, blobKeys]))
+   ```
+5. **Send** `{ ciphertext, nonce, wrappedKeys, master, sig }` to the server as `payloadEnc`.
 
-The server stores the `wrappedKeys` dictionary but cannot unwrap any of them — it has no private keys.
+The server stores everything opaquely; it has no private keys and no master key, so it can neither unwrap `K_item` nor forge a valid `sig`.
 
 ### Decryption
 
 On the receiving device:
 
-1. Find this device's entry in `wrappedKeys`.
-2. Unseal: `K_item = crypto_box_seal_open(wrappedKeys[myId], myPubkey, myPrivkey)`.
+1. **Verify `sig`** with `K_mac` over the same canonical fields. Reject the item on mismatch — this is how a forged or relabelled item (a malicious server moving it between bins, or changing its id/type/timestamp, or swapping its attachment) is caught.
+2. Recover `K_item` via the `master` wrap (`secretbox_open` with MK) or this device's entry in `wrappedKeys` (`crypto_box_seal_open`).
 3. Decrypt: `plaintext = AEAD_Decrypt(K_item, nonce, ciphertext, AAD)`.
+
+Because `sig` binds `binId`, moving an item between bins recomputes it on the moving device (which holds the master key); a server cannot move items itself.
 
 ### Large items (blobs)
 
@@ -86,8 +96,8 @@ The 6-word pair code is a secure out-of-band channel:
    attestation = HMAC-SHA256(sharedSecret, npk || epk)
    ```
    Sends `{ code, npk, name, glyph, attestation }` to the server.
-3. **Server** forwards to the existing device via WebSocket.
-4. **Existing device** verifies the attestation, wraps the master key to `npk`:
+3. **Both devices** display a 6-digit **verification code** = `BLAKE2b(epk || npk) mod 1e6`. The user confirms they match and **approves on the existing device**. Because the code is bound to the *actual* joining public key, an attacker who only photographed the QR (and so knows the pair code) produces a different code and is rejected.
+4. **Existing device** (after approval) verifies the attestation and wraps the master key to `npk`:
    ```
    wrappedMasterKey = crypto_box_seal(masterKey, npk)
    ```
@@ -134,8 +144,8 @@ There is currently no automated key rotation. Manual re-encryption of all items 
 
 SyncBins protects against:
 
-- **Compromised server** — the server database contains only ciphertext.
-- **Compromised storage** — blobs are ciphertext blobs with opaque names.
+- **Compromised server** — the server database contains only ciphertext. It also cannot **forge or relabel** items: every item carries a master-key-derived `sig` it can't compute, verified on receipt.
+- **Compromised storage** — blobs are ciphertext blobs with opaque names; the item `sig` binds the blob reference and keys, so a swapped blob is rejected.
 - **Network interception** — all traffic is TLS; payloads are additionally E2E encrypted.
 - **Revoked device** — revocation invalidates the session token; the revoked device cannot pull new items.
 

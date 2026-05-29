@@ -39,10 +39,29 @@ There are no rules yet for sequential digits or PIN history — keep it non-obvi
 
 After saving, the lock screen offers PIN entry by default. **Use recovery phrase** remains available under other unlock methods.
 
+## On the mobile app
+
+The mobile app uses the same PIN model with two differences that make it
+stronger and more convenient:
+
+- The PIN-wrapped master key is stored in the **OS keychain / Keystore**, not
+  plain storage — so an offline attack must defeat both the secure enclave *and*
+  Argon2id.
+- You can enable **Face ID / Touch ID / fingerprint** as a convenience on top of
+  the PIN (the PIN is always the fallback and owns the 5-attempt lockout).
+- The app **locks when it goes to the background** and wipes the master key from
+  memory; the PIN or a biometric scan is required to return.
+
+See [Mobile apps → Unlocking](/integrations/mobile/#unlocking-the-app).
+
 ## What it isn't
 
 <Aside type="caution" title="A PIN is convenience, not a second factor">
-The PIN doesn't add cryptographic strength. An attacker with a copy of your device's IndexedDB blob can brute-force a 6-digit PIN trivially. The PIN protects against **shoulder-surfing** and **casual access**, not against a determined attacker with disk access.
+The PIN doesn't add much cryptographic strength on its own — a 6-digit PIN is low
+entropy. On the **web client** the wrapped blob lives in `localStorage`, so the
+PIN mainly protects against **shoulder-surfing** and **casual access**, not a
+determined attacker with disk access. (Mobile stores the wrapped key in the OS
+keychain, which raises the bar — see above.)
 
 If your threat model includes someone getting your device while it's idle-locked, set a strong device-level passcode (iOS/Android lockscreen, FileVault, BitLocker) — that's where the real protection lives.
 </Aside>

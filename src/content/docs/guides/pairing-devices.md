@@ -30,9 +30,12 @@ The new device will:
 1. Fetch the ephemeral public key from the server using the code as a lookup.
 2. Generate its own Curve25519 keypair.
 3. Send its public key + an HMAC attestation proving it knows the shared secret.
-4. Receive the master key, wrapped to its public key by the existing device.
+4. Show a **6-digit verification code** derived from both public keys.
+5. Receive the master key, wrapped to its public key by the existing device — but only after you confirm the code matches and **approve on the existing device**.
 
 The server forwards messages but never sees the master key.
+
+> **Confirm the verification code.** Both devices show the same 6-digit code. Approve only when they match — this binds the transfer to the device you actually scanned, so someone who merely photographed the QR can't pair (their device produces a different code).
 
 ## What gets synced to the new device
 

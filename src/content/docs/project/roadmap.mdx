@@ -16,6 +16,9 @@ Roadmaps lie easily. This page lists **directional** work with evidence in the m
 - Multi-tenant mode + signup + Stripe wiring (hosted shape)
 - MCP server (`@syncbins/mcp`) — four tools
 - Quick-unlock PIN, recovery phrase onboarding, device revoke
+- **Mobile app (beta)** — iOS/Android (.NET MAUI): QR pairing, PIN + biometric unlock
+- **QR device pairing** with a 6-digit verification code + explicit approval
+- **Per-item authentication** — items (and blob attachments) carry a master-key-derived `sig`; the server can't forge or relabel them
 
 ## In progress / visible placeholders
 
@@ -23,9 +26,8 @@ Roadmaps lie easily. This page lists **directional** work with evidence in the m
 |------|----------|------|
 | **Automated backups** | Settings → Backups "Coming soon" pane | [Backups](/self-hosting/backups/) |
 | **Link preview / OG fetch** | Items save `Fetching preview…` placeholder | [Content types](/reference/types/) |
-| **QR pair scanning** | `QRPlaceholder` in Devices UI | [Pairing](/get-started/pairing/) |
+| **Mobile store builds** | App builds from source; no TestFlight/Play yet | [Mobile](/integrations/mobile/) |
 | **Browser extension** | Empty Extension repo | [Extension](/integrations/extension/) |
-| **Mobile apps** | Empty Mobile repo | [Mobile](/integrations/mobile/) |
 | **Native desktop** | No repo yet | [Desktop](/integrations/desktop/) |
 | **Composer tools** | Paste button only; no mic/upload/password toolbar | [First item](/get-started/first-item/) |
 | **Sidebar storage meter** | Hardcoded placeholder in UI | — |

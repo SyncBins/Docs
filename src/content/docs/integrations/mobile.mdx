@@ -1,42 +1,96 @@
 ---
 title: Mobile apps
-description: Native iOS and Android clients for SyncBins. Not shipped yet — pair the mobile browser for now.
+description: Native iOS and Android clients for SyncBins — QR pairing, PIN and biometric unlock, end-to-end encrypted sync.
 sidebar:
   order: 3
   badge:
-    text: Soon
-    variant: note
+    text: Beta
+    variant: tip
 ---
 
-import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Steps, LinkCard, CardGrid } from '@astrojs/starlight/components';
 
-Native mobile apps are on the roadmap. They will pair as devices, hold keys in the secure enclave where the OS allows, and support QR scanning for the six-word pair flow (the web app shows a QR placeholder but cannot scan yet).
+SyncBins has a native mobile client (iOS and Android), built with .NET MAUI and
+sharing the same end-to-end crypto as the web app. It pairs as a device, holds
+the master key in memory (never written to disk), and protects it at rest with a
+PIN and optional biometrics.
 
-## Status today
-
-**Not available.** The [Mobile](https://github.com/SyncBins/Mobile) repository is empty. There are no TestFlight or Play Store builds.
-
-## What works instead (now)
-
-1. Open your SyncBins URL in **Safari** or **Chrome** on the phone.
-2. Complete [onboarding](/get-started/first-setup/) via **Pair this device** and the six-word code from a laptop.
-3. Add items from the mobile browser — same composer and drag limitations as desktop (no native share sheet yet).
-
-Session + PIN behavior matches the web client: optional [quick-unlock PIN](/get-started/quick-unlock/), recovery phrase for full restore.
-
-<Aside type="note" title="When apps ship">
-This page will cover install, biometric unlock, background sync, and QR pair. We will not document features until they exist in the Mobile repo.
+<Aside type="note" title="Distribution">
+The app lives in the [`Mobile`](https://github.com/SyncBins/Mobile) repository and
+builds for iOS 16+ and Android 11+. Store / TestFlight builds are coming; for now
+it is built from source or distributed internally. Functionality is complete and
+under on-device testing.
 </Aside>
+
+## Pairing the phone
+
+Adding the phone uses the **QR pairing** flow — no passphrase typing. You need a
+device that's already signed in (e.g. the web app) to authorize it.
+
+<Steps>
+1. On the signed-in device: **Settings → Devices → Pair a device**. A QR code and
+   a 6-word code appear.
+2. In the mobile app, tap **Scan QR to pair** and point the camera at the code.
+3. Both screens show the **same 6-digit verification code**. Check they match,
+   then tap **Approve & pair** on the signed-in device.
+4. Name the phone when prompted. The master key is delivered sealed to the
+   phone's key; the app unlocks and starts syncing.
+</Steps>
+
+<Aside type="caution" title="Always check the 6-digit code">
+The verification code binds pairing to *this* phone. If the codes don't match,
+reject — someone else may be trying to pair. Approving only on a match is what
+makes photographing the QR useless to an attacker.
+</Aside>
+
+If a camera isn't available, tap **use passphrase instead** and sign in with your
+passphrase (you can also type the 6-word code on a device that supports it).
+
+## Unlocking the app
+
+The first time you sign in you set a **PIN** (6+ digits) and may enable
+**Face ID / Touch ID / fingerprint**.
+
+- The PIN wraps the master key (Argon2id) and is stored in the OS keychain /
+  Keystore — not in plain storage.
+- The app **locks when it goes to the background**; returning requires the PIN
+  (or a biometric scan).
+- After **5 wrong PINs** the device is wiped and must be re-paired.
+- Biometrics are a convenience on top of the PIN, which is always the fallback.
+
+See [Quick-unlock PIN](/get-started/quick-unlock/) for the shared model.
+
+## What syncs
+
+- New items fan out in real time over WebSocket.
+- History downloads as the sync cursor catches up.
+- Every item is verified on receipt — an item the server forged or relabelled is
+  rejected (see [How encryption works](/concepts/encryption/#item-authentication)).
+- Android: text/link/image **share-sheet** intents route into your inbox.
+
+## Security at rest
+
+- The master key lives **only in memory** while unlocked; backgrounding wipes it.
+- At rest it exists only as the PIN-wrapped blob and (if enabled) a
+  biometric-gated copy.
+- Transport is HTTPS-only (cleartext is blocked except localhost for development).
+
+Full detail: `Mobile/SECURITY.md` in the Mobile repository.
 
 <CardGrid>
   <LinkCard
     title="Pairing more devices"
-    description="Six-word code flow (type manually today)."
+    description="QR pairing, the verification code, and the manual fallback."
     href="/get-started/pairing/"
   />
   <LinkCard
-    title="Adding your first item"
-    description="Composer and clipboard on mobile web."
-    href="/get-started/first-item/"
+    title="Quick-unlock PIN"
+    description="PIN + biometric unlock and the lockout policy."
+    href="/get-started/quick-unlock/"
+  />
+  <LinkCard
+    title="How encryption works"
+    description="Pairing handshake and item authentication."
+    href="/concepts/encryption/"
   />
 </CardGrid>

@@ -13,9 +13,18 @@ Curated release notes — not auto-generated from every commit. During alpha, wa
 
 SyncBins is **pre-1.0**. The hosted product and docs evolve together. Notable areas in the current codebase:
 
-- Web client: onboarding wizard (create / pair / restore), Inbox + bins, composer, drag/drop, clipboard hint, device pairing, quick-unlock PIN, Settings panes
+- Web client: onboarding wizard (create / pair / restore), Inbox + bins, composer, drag/drop, clipboard hint, QR device pairing, quick-unlock PIN, Settings panes
 - Server: Fastify REST + WebSocket, SQLite, local/R2/Azure blobs, single- and multi-tenant modes, Stripe hooks (hosted)
 - Integrations: `@syncbins/mcp` MCP tools
+- Mobile app (beta): iOS/Android (.NET MAUI) — QR pairing, PIN + biometric unlock, encrypted sync
+
+Recent security work:
+
+- **QR device pairing** with a 6-digit verification code and explicit approval on the existing device (defeats QR-photograph hijack).
+- **Per-item authentication** — items and blob attachments carry a master-key-derived MAC (`sig`); clients reject anything the server forged, relabelled, moved between bins, or whose attachment was swapped. Enforced (unsigned items rejected).
+- **Mobile at-rest hardening** — master key held in memory only; PIN-wrapped (Argon2id) + optional biometric unlock; lock-on-background; HTTPS-only transport.
+
+See `App/SECURITY.md` and `Mobile/SECURITY.md` for the full model.
 
 This list describes what exists today, not a promise of stability.
 

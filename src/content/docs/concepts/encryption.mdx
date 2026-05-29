@@ -20,11 +20,13 @@ SyncBins only uses well-vetted, NaCl-family primitives — there's no custom cry
 |-----|-----------|--------------|
 | Symmetric encryption (items, blobs) | `XChaCha20-Poly1305` | `crypto_aead_xchacha20poly1305_ietf_*` |
 | Key wrapping (K_item → device) | `Curve25519 sealed box` | `crypto_box_seal` / `_open` |
-| Master-key derivation | `Argon2id` (t=3, m=64 MiB) | `crypto_pwhash` |
+| Master-key derivation (recovery phrase) | `Argon2id` (t=3, m=64 MiB) | `crypto_pwhash` |
+| Passphrase → KEK (wraps master key) | `Argon2id` (t=3, m=256 MiB) | `crypto_pwhash` |
 | PIN key stretching | `Argon2id` (t=4, m=64 MiB) | `crypto_pwhash` |
 | Recovery phrase | `BIP39` 128-bit entropy | `@scure/bip39` |
 | Pairing shared secret | `BLAKE2b` | `crypto_generichash` |
 | Pairing attestation | `HMAC-SHA512-256` | `crypto_auth` / `_verify` |
+| Item authentication (`sig`) | `HMAC-SHA512-256` (MK-derived key) | `crypto_auth` / `_verify` |
 | Device reauth challenge | `Curve25519 sealed box` | `crypto_box_seal` / `_open` |
 | Session tokens | `SHA-256` (server-side hash) | Node `crypto.createHash` |
 | Blob signed URLs | `HMAC-SHA256` | Node `crypto.createHmac` |
@@ -87,7 +89,7 @@ When you send an item, four things happen on the client. The server never sees t
       <rect width="140" height="80" rx="10" fill="url(#ed-plain)" stroke="oklch(0.45 0.1 215 / .4)"/>
       <text x="70" y="22" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9" fill="#7dd3fc" letter-spacing="1">PLAINTEXT</text>
       <text x="70" y="44" text-anchor="middle" font-family="Geist, sans-serif" font-size="11" fill="#f5f3f7">{`{ url: "…", title: "…" }`}</text>
-      <text x="70" y="64" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9" fill="#a09ca8">AAD = bin_id ∥ type ∥ ts</text>
+      <text x="70" y="64" text-anchor="middle" font-family="Geist Mono, monospace" font-size="9" fill="#a09ca8">AAD = type ∥ ts</text>
     </g>
     <g style="color:#322f3b">
       <line x1="365" y1="80" x2="395" y2="80" stroke="currentColor" stroke-width="1.5" marker-end="url(#ed-arr)"/>
@@ -123,11 +125,29 @@ When you send an item, four things happen on the client. The server never sees t
 // Per-item encryption (TypeScript-ish pseudocode)
 const K_item   = randomBytes(32);
 const nonce    = randomBytes(24);
-const aad      = utf8(`${bin_id}|${type}|${ts}`);
+const aad      = utf8(`${type}|${ts}`);                 // binId is bound by sig, not AAD
 const ct       = xchacha20poly1305.encrypt(K_item, nonce, plaintext, aad);
 const wrapped  = devices.map(d => sodium.crypto_box_seal(K_item, d.pubkey));
-postItem({ id, bin_id, type, ts, nonce, ct, wrapped });
+const master   = secretbox(K_item, masterKey);          // any device with MK can decrypt
+// Authentication tag — keyed by a master-key-derived subkey the server never has
+const K_mac    = blake2b(masterKey, "syncbins-item-mac-v1", 32);
+const sig      = crypto_auth(K_mac, canonical(id, bin_id, type, ts, ct, nonce));
+postItem({ id, bin_id, type, ts, nonce, ct, wrapped, master, sig });
 ```
+
+### Item authentication
+
+The `sig` tag is what stops a malicious server from **forging or relabelling**
+items. It's an HMAC over the item's id, bin, type, timestamp, and ciphertext,
+keyed by a subkey derived from the master key — which the server never holds, so
+it can't produce a valid tag. Recipients **verify `sig` before decrypting and
+reject anything that fails**, so the server can neither inject content that looks
+like it came from one of your devices nor silently move an item to another bin or
+change its id/type/timestamp.
+
+Because `sig` binds `binId`, moving an item between bins re-signs it (the moving
+device holds the master key). For items with a file attachment, `sig` also binds
+the blob reference and wrapped blob keys, so the attachment can't be swapped.
 
 ### Big items: blobs
 
@@ -209,7 +229,9 @@ The 6-word pair code you see in the UI is a hash of an ephemeral public key. The
   </svg>
 </div>
 
-The attestation in step 3 proves the new device knows the shared secret — derived from `BLAKE2b(ephemeralPubkey || code)` — meaning it physically read the 6 words from the existing device, not just intercepted them on the wire. The master key is sealed with `crypto_box_seal` to the new device's pubkey and only delivered after the server verifies the attestation.
+The attestation in step 3 proves the new device knows the shared secret — derived from `BLAKE2b(ephemeralPubkey || code)` — meaning it physically read the 6 words (or scanned the QR) from the existing device, not just intercepted them on the wire.
+
+Before the master key is sealed, both devices display a **6-digit verification code** = `BLAKE2b(ephemeralPubkey || newDevicePubkey) mod 1e6`, and the user must **approve on the existing device**. Because the code is bound to the *actual* joining public key, an attacker who photographed the QR (and thus knows the code) produces a *different* verification code — the mismatch is visible and the user rejects. Only on approval does the existing device `crypto_box_seal` the master key to the new device's pubkey and `pair-wrap` it.
 
 ## Returning to your device
 
@@ -226,7 +248,7 @@ If even the reauth fails (e.g. the device was revoked), you'll be guided to re-p
 | Adversary | Can read items? | Notes |
 |-----------|-----------------|-------|
 | Network observer (TLS-on-the-wire) | No | HTTPS + items already encrypted at the app layer. |
-| Compromised SyncBins host | No | Sees ciphertext + metadata only. Cannot fabricate items signed by another device. |
+| Compromised SyncBins host | No | Sees ciphertext + metadata only. Cannot forge items, relabel them, or move them between bins — the master-key-derived `sig` (which it can't compute) is verified on every item. |
 | Stolen unlocked device | Yes | Set a PIN; revoke the device remotely from another paired device. |
 | Recovery phrase + stolen device | Yes | Full access. Keep the phrase offline; rotate after exposure. |
 | Malicious paired device | Yes | It's paired — it has the master key. Revoke + rotate to evict. |

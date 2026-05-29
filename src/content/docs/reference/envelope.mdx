@@ -27,9 +27,14 @@ Stored as JSON in SQLite column `payload_enc`:
 
 ```ts
 interface ItemEnvelope {
-  ct: string;    // base64 ciphertext + poly1305 tag
-  nonce: string; // base64, 24-byte XChaCha20 nonce
-  keys: Record<DeviceId, string>; // base64 sealed K_item per device pubkey
+  ct: string;    // base64url ciphertext + poly1305 tag
+  nonce: string; // base64url, 24-byte XChaCha20 nonce
+  keys: Record<DeviceId, string>; // base64url sealed K_item per device pubkey
+  master?: {     // secretbox(K_item, masterKey) — any device holding MK can decrypt
+    nonce: string;
+    ct: string;
+  };
+  sig: string;   // base64url item authentication tag (required) — see "Item authentication"
 }
 ```
 
@@ -37,18 +42,21 @@ interface ItemEnvelope {
 
 1. `K_item = randomBytes(32)`
 2. `nonce = randomBytes(24)`
-3. Build AAD as UTF-8 bytes of `binId + "|" + type + "|" + ts` — server validates these wire fields match AAD
+3. Build AAD as UTF-8 bytes of `type + "|" + ts` (binId is **not** in the AAD — it's covered by `sig`)
 4. `ct = AEAD_Encrypt(K_item, nonce, plaintextJSON, aad)`
 5. For each non-revoked device: `keys[deviceId] = crypto_box_seal(K_item, devicePubkey)`
-6. `POST /api/items` with `{ payloadEnc: { ct, nonce, keys }, … }`
+6. `master = secretbox(K_item, masterKey)`
+7. `sig = crypto_auth(K_mac, canonical(id, binId, type, ts, ct, nonce [, blobRef, blobNonce, blobKeys]))` where `K_mac = BLAKE2b(masterKey, "syncbins-item-mac-v1", 32)`
+8. `POST /api/items` with `{ payloadEnc: { ct, nonce, keys, master, sig }, … }`
 
 ### Decryption (client read)
 
-1. `K_item = crypto_box_seal_open(keys[myDeviceId], myPubkey, myPrivkey)`
-2. Reconstruct same AAD from row metadata
-3. `plaintext = AEAD_Decrypt(K_item, nonce, ct, aad)`
+1. **Verify `sig`** with `K_mac` over the same canonical fields. Reject the item on mismatch (forged, tampered, or relabelled by the server).
+2. `K_item` via the `master` wrap (`secretbox_open` with MK) or `crypto_box_seal_open(keys[myDeviceId], myPubkey, myPrivkey)`.
+3. Reconstruct AAD (`type|ts`) from row metadata.
+4. `plaintext = AEAD_Decrypt(K_item, nonce, ct, aad)`
 
-If `keys` lacks an entry for this device, decryption fails — run re-wrap from a device that still has access, or the item predates pairing and was never re-wrapped.
+A device that holds the master key can always decrypt via the `master` wrap, even for items created before it was paired. The per-device `keys` map remains for compatibility.
 
 ## Blob-backed items
 
@@ -85,11 +93,21 @@ Download: `GET /api/blobs/:ref/url` → presigned GET → decrypt with `blobNonc
 
 REST API uses **standard base64** in JSON (see [REST API conventions](/reference/rest/#conventions)). Internal crypto helpers may use base64url in browser storage — convert at the HTTP boundary to match zod schemas.
 
-## AAD binding
+## AAD binding & item authentication
 
-AAD is the UTF-8 string `binId|type|ts` (three wire fields joined by pipe characters).
+The AEAD AAD is the UTF-8 string `type|ts`. `binId` is deliberately **not** in the
+AAD, so an item can move between bins without re-encrypting its body.
 
-If an attacker with DB access swaps ciphertext between rows without re-encrypting, authentication fails on decrypt. The server checks `binId`, `type`, and `ts` on the wire match what the client claims.
+Integrity of the metadata and the item's authenticity come from the `sig` tag, an
+HMAC (`crypto_auth`, HMAC-SHA-512-256) keyed by a master-key-derived subkey the
+server never holds. It covers `id, binId, type, ts, ct, nonce` (plus `blobRef`,
+`blobNonce`, and the sorted `blobKeys` map when the item has a blob). Clients
+verify it before decrypting and reject mismatches, so the server cannot forge an
+item, relabel its type/timestamp/id, move it between bins, or swap its
+attachment. `sig` is **required** — items without a valid tag are rejected.
+
+Because `sig` binds `binId`, a bin move (`POST /api/items/:id/reconcile`) carries a
+freshly recomputed tag from the moving client (which holds the master key).
 
 ## Example PUT body (inline link)
 
@@ -104,7 +122,9 @@ If an attacker with DB access swaps ciphertext between rows without re-encryptin
     "nonce": "base64…",
     "keys": {
       "01JB…": "base64…"
-    }
+    },
+    "master": { "nonce": "base64…", "ct": "base64…" },
+    "sig": "base64…"
   }
 }
 ```

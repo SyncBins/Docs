@@ -19,3 +19,5 @@ pnpm-debug.log*
 .vscode/
 .idea/
 .DS_Store
+_temp_extract/
+_temp_extract2/
